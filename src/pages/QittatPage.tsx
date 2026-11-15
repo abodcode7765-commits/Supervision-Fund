@@ -68,7 +68,7 @@ export function QittatPage({
     onCreateQitta({
       name: name.trim(),
       reason: reason.trim() || 'مصروف مشترك',
-      description: description.trim() || reason.trim() || 'تجميع قِطّة بين الأعضاء المشاركين.',
+      description: description.trim() || reason.trim() || 'تجميع قطة بين الأعضاء المشاركين.',
       createdAt: '2026-11-15',
       totalAmount,
       status: 'جديدة',
@@ -102,7 +102,7 @@ export function QittatPage({
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-[#2878C8] text-sm font-semibold text-[#172B45] cursor-pointer"
           >
             <ArrowRight className="w-4 h-4" />
-            <span>العودة إلى قائمة القِطّات</span>
+            <span>العودة إلى قائمة القطات</span>
           </button>
         </div>
 
@@ -128,7 +128,7 @@ export function QittatPage({
               </p>
               <div className="mt-2 text-xs text-[#748399]">
                 السبب: <span className="text-[#172B45] font-semibold">{selectedQitta.reason}</span> ·
-                تاريخ القِطّة:{' '}
+                تاريخ القطة:{' '}
                 <span className="tabular-nums text-[#172B45]">{selectedQitta.createdAt}</span>
               </div>
             </div>
@@ -143,7 +143,7 @@ export function QittatPage({
 
           <div className="p-4 rounded-xl bg-[#F8FAFC] border border-slate-200/70 space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="font-bold text-[#172B45]">نسبة تحصيل القِطّة ({pct}%)</span>
+              <span className="font-bold text-[#172B45]">نسبة تحصيل القطة ({pct}%)</span>
               <div className="flex items-center gap-4 tabular-nums">
                 <span className="text-[#16A36A] font-bold">
                   المحصل: {formatCurrency(collected)}
@@ -242,7 +242,7 @@ export function QittatPage({
         <Modal
           isOpen={Boolean(payModalParticipant)}
           onClose={() => setPayModalParticipant(null)}
-          title="تسجيل سداد حصة قِطّة"
+          title="تسجيل سداد حصة قطة"
           subtitle={payModalParticipant?.memberName}
           size="sm"
         >
@@ -320,7 +320,7 @@ export function QittatPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        title="إدارة القِطّات"
+        title="إدارة القطات"
         description="تنظيم المبالغ التشاركية للمناسبات والرحلات والاستراحات والمصروفات المشتركة بين الأعضاء."
         action={
           <button
@@ -329,7 +329,7 @@ export function QittatPage({
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
-            <span>إنشاء قِطّة جديدة</span>
+            <span>إنشاء قطة جديدة</span>
           </button>
         }
       />
@@ -339,9 +339,9 @@ export function QittatPage({
         <div className="flex items-center gap-2.5 text-[#123B70]">
           <ShieldCheck className="w-4 h-4 text-[#2878C8] shrink-0" />
           <span>
-            <strong>صلاحية إدارة القِطّات:</strong> العضو المخوّل بإدارة هذا القسم{' '}
-            <strong className="underline">تركي عبدالله (مسؤول القِطّات)</strong> — مستخدم مستقل
-            مخصص لقسم القِطّات فقط دون صلاحيات المدير الكاملة.
+            <strong>صلاحية إدارة القطات:</strong> العضو المخوّل بإدارة هذا القسم{' '}
+            <strong className="underline">تركي عبدالله (مسؤول القطات)</strong> — مستخدم مستقل
+            مخصص لقسم القطات فقط دون صلاحيات المدير الكاملة.
           </span>
         </div>
       </div>
@@ -349,8 +349,8 @@ export function QittatPage({
       {/* Top Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
-          title="إجمالي القِطّات"
-          value={`${qittat.length} قِطّات`}
+          title="إجمالي القطات"
+          value={`${qittat.length} قطات`}
           subtitle="الحالية والسابقة"
           icon={Coins}
           accent="royal"
@@ -358,7 +358,7 @@ export function QittatPage({
         <StatCard
           title="إجمالي المبالغ المطلوبة"
           value={formatCurrency(totalRequired)}
-          subtitle="مجموع تكلفة القِطّات المسجلة"
+          subtitle="مجموع تكلفة القطات المسجلة"
           icon={Users}
           accent="blue"
         />
@@ -458,7 +458,7 @@ export function QittatPage({
                 onClick={() => setSelectedQittaId(q.id)}
                 className="mt-5 w-full py-2.5 rounded-xl bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-sm font-bold transition-colors cursor-pointer"
               >
-                عرض تفاصيل القِطّة
+                عرض تفاصيل القطة
               </button>
             </div>
           );
@@ -469,20 +469,20 @@ export function QittatPage({
       <Modal
         isOpen={createOpen}
         onClose={() => setCreateOpen(false)}
-        title="إنشاء قِطّة جديدة"
-        subtitle="حدد تفاصيل القِطّة واختر الأعضاء المشاركين لحساب نصيب كل مشارك تلقائياً"
+        title="إنشاء قطة جديدة"
+        subtitle="حدد تفاصيل القطة واختر الأعضاء المشاركين لحساب نصيب كل مشارك تلقائياً"
         size="lg"
       >
         <form onSubmit={handleCreate} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold text-[#172B45] mb-1.5">اسم القِطّة</label>
+              <label className="block text-xs font-bold text-[#172B45] mb-1.5">اسم القطة</label>
               <input
                 type="text"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="مثال: قِطّة استراحة نهاية الأسبوع"
+                placeholder="مثال: قطة استراحة نهاية الأسبوع"
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
               />
             </div>
@@ -502,7 +502,7 @@ export function QittatPage({
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-[#172B45] mb-1.5">سبب القِطّة</label>
+            <label className="block text-xs font-bold text-[#172B45] mb-1.5">سبب القطة</label>
             <input
               type="text"
               required
@@ -569,7 +569,7 @@ export function QittatPage({
               type="submit"
               className="px-5 py-2.5 rounded-xl bg-[#2878C8] text-sm font-semibold text-white cursor-pointer"
             >
-              حفظ وإنشاء القِطّة
+              حفظ وإنشاء القطة
             </button>
           </div>
         </form>

@@ -73,7 +73,7 @@ export function Topbar({
   const visibleMembers =
     currentUser.role === 'رئيس المجموعة' && currentUser.groupId
       ? members.filter((m) => m.groupId === currentUser.groupId)
-      : currentUser.role === 'مسؤول القِطّات'
+      : currentUser.role === 'مسؤول القطات'
         ? []
         : members;
 
@@ -128,7 +128,7 @@ export function Topbar({
   const rolePreviewAccounts = [
     allUsers.find((u) => u.role === 'مدير الصندوق'),
     allUsers.find((u) => u.role === 'رئيس المجموعة'),
-    allUsers.find((u) => u.role === 'مسؤول القِطّات'),
+    allUsers.find((u) => u.role === 'مسؤول القطات'),
   ].filter(Boolean) as SystemUser[];
 
   return (

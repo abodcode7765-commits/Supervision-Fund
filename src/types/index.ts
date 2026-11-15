@@ -131,7 +131,7 @@ export interface Expense {
   notes: string;
 }
 
-export type UserRole = 'مدير الصندوق' | 'رئيس المجموعة' | 'مسؤول القِطّات';
+export type UserRole = 'مدير الصندوق' | 'رئيس المجموعة' | 'مسؤول القطات';
 
 export interface SystemUser {
   id: string;

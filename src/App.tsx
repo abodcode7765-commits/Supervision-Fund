@@ -312,7 +312,7 @@ export default function App() {
         };
       })
     );
-    notify('تم تسجيل دفعة المشارك في القِطّة بنجاح.');
+    notify('تم تسجيل دفعة المشارك في القطة بنجاح.');
   };
 
   // Marriage aid actions

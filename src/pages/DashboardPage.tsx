@@ -88,7 +88,7 @@ export function DashboardPage({
     { id: 'subscriptions', label: 'الاشتراكات', icon: CalendarCheck },
     { id: 'payments', label: 'سجل السداد', icon: ReceiptText },
     { id: 'overdue', label: 'المتأخرات', icon: AlertOctagon },
-    { id: 'qittat', label: 'القِطّات', icon: Coins },
+    { id: 'qittat', label: 'القطات', icon: Coins },
     { id: 'marriage-aid', label: 'معونة الزواج', icon: HeartHandshake },
     { id: 'expenses', label: 'المصروفات', icon: Wallet },
     { id: 'reports', label: 'التقارير', icon: FileBarChart2 },

@@ -25,7 +25,7 @@ export function MobileBottomNav({
     { id: 'members', label: 'الأعضاء', icon: Users },
     { id: 'subscriptions', label: 'الاشتراكات', icon: CalendarCheck },
     { id: 'payments', label: 'السداد', icon: ReceiptText },
-    { id: 'qittat', label: 'القِطّات', icon: Coins },
+    { id: 'qittat', label: 'القطات', icon: Coins },
   ];
 
   const items = candidates.filter((c) => allowedPages.includes(c.id)).slice(0, 4);

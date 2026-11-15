@@ -40,7 +40,7 @@ const REPORT_OPTIONS: { id: ReportType; label: string }[] = [
   { id: 'payments', label: 'تقرير المدفوعات' },
   { id: 'overdue', label: 'تقرير المتأخرات' },
   { id: 'expenses', label: 'تقرير المصروفات' },
-  { id: 'qittat', label: 'تقرير القِطّات' },
+  { id: 'qittat', label: 'تقرير القطات' },
   { id: 'marriage-aid', label: 'تقرير مساعدات الزواج' },
 ];
 
@@ -313,9 +313,9 @@ export function ReportsPage({
                   <td className="py-3 px-4 text-xs">إيراد</td>
                 </tr>
                 <tr>
-                  <td className="py-3 px-4 font-bold">متحصلات القِطّات المشتركة</td>
+                  <td className="py-3 px-4 font-bold">متحصلات القطات المشتركة</td>
                   <td className="py-3 px-4 text-xs text-[#748399]">
-                    إجمالي المبالغ المحصلة في قسم القِطّات ({qittat.length} قِطّات)
+                    إجمالي المبالغ المحصلة في قسم القطات ({qittat.length} قطات)
                   </td>
                   <td className="py-3 px-4 font-bold text-[#2878C8] tabular-nums">
                     {formatCurrency(totalQittatCollected)}
@@ -548,7 +548,7 @@ export function ReportsPage({
             <table className="w-full text-right border-collapse">
               <thead>
                 <tr className="bg-[#123B70] text-white text-xs font-bold">
-                  <th className="py-3 px-4">اسم القِطّة</th>
+                  <th className="py-3 px-4">اسم القطة</th>
                   <th className="py-3 px-4">السبب</th>
                   <th className="py-3 px-4">المبلغ المطلوب</th>
                   <th className="py-3 px-4">المحصل</th>

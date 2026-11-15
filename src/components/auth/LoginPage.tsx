@@ -75,7 +75,7 @@ export function LoginPage({
           </h2>
           <p className="mt-4 text-sm sm:text-base text-[#D7E8FA] leading-relaxed">
             منصة إدارية متكاملة لمتابعة اشتراكات الأعضاء السنوية والشهرية، تنظيم المجموعات،
-            إدارة القِطّات ومعونة الزواج، وإصدار التقارير المالية الدقيقة.
+            إدارة القطات ومعونة الزواج، وإصدار التقارير المالية الدقيقة.
           </p>
 
           <div className="mt-8 grid grid-cols-2 gap-4 pt-6 border-t border-white/15">

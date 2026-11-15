@@ -603,7 +603,7 @@ function MemberDetailsView({
   const tabs = [
     { id: 'subscriptions' as const, label: 'سجل الاشتراكات حسب السنوات' },
     { id: 'payments' as const, label: 'سجل المدفوعات' },
-    { id: 'qittat' as const, label: 'القِطّات المشاركة' },
+    { id: 'qittat' as const, label: 'القطات المشاركة' },
     { id: 'marriage' as const, label: 'معونة الزواج' },
   ];
 
@@ -845,12 +845,12 @@ function MemberDetailsView({
           {activeTab === 'qittat' && (
             <div className="overflow-x-auto">
               {memberQittat.length === 0 ? (
-                <p className="text-sm text-[#748399]">لم يشارك هذا العضو في قِطّات مسجلة حالياً.</p>
+                <p className="text-sm text-[#748399]">لم يشارك هذا العضو في قطات مسجلة حالياً.</p>
               ) : (
                 <table className="w-full text-right border-collapse">
                   <thead>
                     <tr className="bg-[#F8FAFC] border-b border-slate-200 text-xs font-bold text-[#748399]">
-                      <th className="py-3 px-4">اسم القِطّة</th>
+                      <th className="py-3 px-4">اسم القطة</th>
                       <th className="py-3 px-4">التاريخ</th>
                       <th className="py-3 px-4">حصة العضو</th>
                       <th className="py-3 px-4">المسدد</th>

@@ -42,7 +42,7 @@ export const INITIAL_GROUPS: Group[] = [
     name: 'مجموعة ذوي عبدالله',
     leaderId: 'mem-2',
     leaderName: 'أحمد عبدالله',
-    description: 'تضم أبناء وأحفاد عبدالله وتنسق مساهماتهم السنوية والقِطّات.',
+    description: 'تضم أبناء وأحفاد عبدالله وتنسق مساهماتهم السنوية والقطات.',
     createdAt: '2022-02-15',
     baseMemberCount: 24,
   },
@@ -565,7 +565,7 @@ export const INITIAL_PAYMENTS: PaymentRecord[] = [
 export const INITIAL_QITTAT: Qitta[] = [
   {
     id: 'qit-1',
-    name: 'قِطّة اجتماع العيد السنوي',
+    name: 'قطة اجتماع العيد السنوي',
     reason: 'إيجار استراحة وضيافة اللقاء العائلي السنوي',
     description:
       'تغطية تكاليف استئجار قاعة واستراحة اللقاء السنوي لذوي محسن شاملة الضيافة والعشاء والتجهيزات الصوتية.',
@@ -585,7 +585,7 @@ export const INITIAL_QITTAT: Qitta[] = [
   },
   {
     id: 'qit-2',
-    name: 'قِطّة رحلة العلا العائلية',
+    name: 'قطة رحلة العلا العائلية',
     reason: 'رحلة شباب وأعضاء الأسرة الشتوية',
     description: 'تجهيز المخيم والمواصلات والوجبات لرحلة الأسرة الشتوية لمدة ثلاثة أيام.',
     createdAt: '2026-11-01',
@@ -602,9 +602,9 @@ export const INITIAL_QITTAT: Qitta[] = [
   },
   {
     id: 'qit-3',
-    name: 'قِطّة استراحة نهاية الشهر',
+    name: 'قطة استراحة نهاية الشهر',
     reason: 'استئجار استراحة عائلية وضيافة لخمسة مشاركين',
-    description: 'قِطّة استراحة بقيمة 1,000 ريال موزعة بالتساوي على 5 أعضاء بواقع 200 ريال لكل مشارك.',
+    description: 'قطة استراحة بقيمة 1,000 ريال موزعة بالتساوي على 5 أعضاء بواقع 200 ريال لكل مشارك.',
     createdAt: '2026-11-10',
     totalAmount: 1000,
     status: 'قيد التحصيل',
@@ -799,7 +799,7 @@ export const INITIAL_USERS: SystemUser[] = [
     id: 'usr-4',
     name: 'تركي عبدالله',
     username: 't.abdullah',
-    role: 'مسؤول القِطّات',
+    role: 'مسؤول القطات',
     groupId: 'grp-5',
     groupName: 'مجموعة الشباب والناشئة',
     permissions: ['qittat'],

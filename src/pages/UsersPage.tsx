@@ -14,7 +14,7 @@ import { Modal, PageHeader, StatusIndicator } from '../components/ui/SharedUI';
 const ROLE_DEFAULT_PERMISSIONS: Record<UserRole, PageId[]> = {
   'مدير الصندوق': NAV_ITEMS.map((n) => n.id),
   'رئيس المجموعة': ['dashboard', 'members', 'groups', 'subscriptions', 'overdue'],
-  'مسؤول القِطّات': ['qittat'],
+  'مسؤول القطات': ['qittat'],
 };
 
 export function UsersPage({
@@ -76,7 +76,7 @@ export function UsersPage({
     <div className="space-y-6">
       <PageHeader
         title="المستخدمون والصلاحيات"
-        description="إدارة حسابات مسؤولي النظام ورؤساء المجموعات ومسؤول القِطّات وصلاحيات الوصول."
+        description="إدارة حسابات مسؤولي النظام ورؤساء المجموعات ومسؤول القطات وصلاحيات الوصول."
         action={
           <button
             type="button"
@@ -120,9 +120,9 @@ export function UsersPage({
             <Coins className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-sm font-bold text-[#172B45]">مسؤول القِطّات</div>
+            <div className="text-sm font-bold text-[#172B45]">مسؤول القطات</div>
             <p className="text-xs text-[#748399] mt-0.5 leading-relaxed">
-              مستخدم واحد مستقل مخصص لقسم القِطّات فقط، ولا يحصل تلقائياً على صلاحيات المدير.
+              مستخدم واحد مستقل مخصص لقسم القطات فقط، ولا يحصل تلقائياً على صلاحيات المدير.
             </p>
           </div>
         </div>
@@ -162,8 +162,8 @@ export function UsersPage({
                   <td className="py-3.5 px-4 text-xs text-[#748399]">
                     {u.permissions.length === NAV_ITEMS.length
                       ? 'كافة الصفحات (12 صفحة)'
-                      : u.role === 'مسؤول القِطّات'
-                        ? 'قسم القِطّات فقط'
+                      : u.role === 'مسؤول القطات'
+                        ? 'قسم القطات فقط'
                         : `${u.permissions.length} صفحات (عرض المجموعة فقط)`}
                   </td>
                   <td className="py-3.5 px-4 whitespace-nowrap">
@@ -278,7 +278,7 @@ export function UsersPage({
               >
                 <option value="مدير الصندوق">مدير الصندوق</option>
                 <option value="رئيس المجموعة">رئيس المجموعة</option>
-                <option value="مسؤول القِطّات">مسؤول القِطّات</option>
+                <option value="مسؤول القطات">مسؤول القطات</option>
               </select>
             </div>
 
