@@ -48,6 +48,21 @@ import { ExpensesPage } from './pages/ExpensesPage';
 import { ReportsPage } from './pages/ReportsPage';
 import { UsersPage } from './pages/UsersPage';
 import { SettingsPage } from './pages/SettingsPage';
+import {
+  addCurrency,
+  applyPaymentToSubscription,
+  computeMemberYearTotals,
+  createDefaultSubscription,
+  deriveMemberOverallStatus,
+  deriveSubscriptionCellStatuses,
+  formatCurrency,
+  fromHalalas,
+  getTodayIsoDate,
+  recalculateExpensesRunningBalance,
+  reversePaymentFromSubscription,
+  roundCurrency,
+  toHalalas,
+} from './utils/formatters';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -95,16 +110,6 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleSwitchUser = (user: SystemUser) => {
-    setCurrentUser(user);
-    setSelectedMemberId(null);
-    const defaultPage = user.permissions.includes('dashboard')
-      ? 'dashboard'
-      : user.permissions[0] ?? 'qittat';
-    setActivePage(defaultPage);
-    notify(`تم التبديل إلى حساب: ${user.name} (${user.role})`, 'info');
-  };
-
   const handleSelectMemberFromAnywhere = (memberId: string) => {
     if (!currentUser.permissions.includes('members')) return;
     setSelectedMemberId(memberId);
@@ -112,82 +117,156 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Member actions
+  // Helper to sync member overall subscription statuses after any subscription/config mutation
+  const syncMembersStatus = (
+    nextSubs: MemberYearSubscription[],
+    nextConfigs: YearConfig[] = yearConfigs
+  ) => {
+    setMembers((prev) =>
+      prev.map((m) => ({
+        ...m,
+        subscriptionStatus: deriveMemberOverallStatus(m.id, nextSubs, nextConfigs),
+      }))
+    );
+  };
+
+  // Member actions (Non-destructive archive, duplicate nationalId check, real unpaid baseline)
   const handleAddMember = (data: {
     name: string;
     nationalId: string;
     birthDate: string;
     groupId: string;
-    phone: string;
-  }) => {
+  }): { ok: boolean; error?: string } => {
+    const cleanNationalId = data.nationalId.trim();
+    if (members.some((m) => m.nationalId.trim() === cleanNationalId)) {
+      return { ok: false, error: 'رقم الهوية مسجل مسبقاً لعضو آخر في الصندوق.' };
+    }
+
     const grp = groups.find((g) => g.id === data.groupId);
+    if (!grp) {
+      return { ok: false, error: 'يرجى اختيار مجموعة صحيحة.' };
+    }
+
     const newId = `mem-${Date.now()}`;
+    const nextSerial = members.reduce((max, m) => Math.max(max, m.serial), 0) + 1;
+
     const newMember: Member = {
       id: newId,
-      serial: members.length + 1,
-      name: data.name,
-      nationalId: data.nationalId,
+      serial: nextSerial,
+      name: data.name.trim(),
+      nationalId: cleanNationalId,
       birthDate: data.birthDate,
-      groupId: data.groupId,
-      groupName: grp?.name ?? 'مجموعة أبناء محسن الأول',
-      joinDate: '2026-11-15',
+      groupId: grp.id,
+      groupName: grp.name,
+      joinDate: getTodayIsoDate(),
       memberStatus: 'نشط',
-      subscriptionStatus: 'مسدد',
-      phone: data.phone || '0500000000',
+      subscriptionStatus: 'متأخر',
     };
-    setMembers((prev) => [...prev, newMember]);
-    setSubscriptions((prev) => [
-      ...prev,
-      {
-        memberId: newId,
-        year: 2026,
-        foundingStatus: 'paid',
-        foundingPaidAmount: 200,
-        months: [
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'paid',
-          'upcoming',
-        ],
-      },
-    ]);
-    notify(`تمت إضافة العضو "${data.name}" بنجاح.`);
+
+    const initialSubs: MemberYearSubscription[] = yearConfigs.map((yc) =>
+      createDefaultSubscription(newId, yc.year)
+    );
+
+    setMembers((prev) => [newMember, ...prev]);
+    setSubscriptions((prev) => [...prev, ...initialSubs]);
+    notify(`تمت إضافة العضو "${newMember.name}" بنجاح.`);
+    return { ok: true };
   };
 
-  const handleUpdateMember = (updated: Member) => {
-    setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    notify(`تم تحديث بيانات العضو "${updated.name}".`);
+  const handleUpdateMember = (updated: Member): { ok: boolean; error?: string } => {
+    const cleanNationalId = updated.nationalId.trim();
+    if (
+      members.some(
+        (m) => m.id !== updated.id && m.nationalId.trim() === cleanNationalId
+      )
+    ) {
+      return { ok: false, error: 'رقم الهوية مسجل مسبقاً لعضو آخر.' };
+    }
+
+    const grp = groups.find((g) => g.id === updated.groupId);
+    const normalized: Member = {
+      ...updated,
+      name: updated.name.trim(),
+      nationalId: cleanNationalId,
+      groupName: grp?.name ?? updated.groupName,
+    };
+
+    setMembers((prev) => prev.map((m) => (m.id === normalized.id ? normalized : m)));
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.leaderId === normalized.id ? { ...g, leaderName: normalized.name } : g
+      )
+    );
+    setPayments((prev) =>
+      prev.map((p) =>
+        p.memberId === normalized.id
+          ? {
+              ...p,
+              memberName: normalized.name,
+              nationalId: normalized.nationalId,
+              groupId: normalized.groupId,
+              groupName: normalized.groupName,
+            }
+          : p
+      )
+    );
+    setQittat((prev) =>
+      prev.map((q) => ({
+        ...q,
+        participants: q.participants.map((pt) =>
+          pt.memberId === normalized.id ? { ...pt, memberName: normalized.name } : pt
+        ),
+      }))
+    );
+    setMarriageAids((prev) =>
+      prev.map((a) =>
+        a.memberId === normalized.id
+          ? {
+              ...a,
+              memberName: normalized.name,
+              nationalId: normalized.nationalId,
+              birthDate: normalized.birthDate,
+            }
+          : a
+      )
+    );
+
+    notify(`تم تحديث بيانات العضو "${normalized.name}".`);
+    return { ok: true };
   };
 
-  const handleDeleteMember = (id: string) => {
+  const handleToggleArchiveMember = (id: string) => {
     const target = members.find((m) => m.id === id);
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-    if (selectedMemberId === id) setSelectedMemberId(null);
-    notify(`تم حذف العضو "${target?.name ?? ''}" من السجل.`, 'warning');
+    if (!target) return;
+    const nextStatus = target.memberStatus === 'نشط' ? 'موقوف' : 'نشط';
+    setMembers((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, memberStatus: nextStatus } : m))
+    );
+    notify(
+      nextStatus === 'موقوف'
+        ? `تم إيقاف/أرشفة العضو "${target.name}" مع الحفاظ على كامل سجله المالي.`
+        : `تمت إعادة تفعيل العضو "${target.name}".`,
+      nextStatus === 'موقوف' ? 'warning' : 'success'
+    );
   };
 
   // Group actions
   const handleCreateGroup = (data: { name: string; leaderId: string; description: string }) => {
     const leader = members.find((m) => m.id === data.leaderId);
+    const matchingUser = users.find(
+      (u) => u.name === leader?.name && u.role === 'رئيس المجموعة'
+    );
     const newGroup: Group = {
       id: `grp-${Date.now()}`,
-      name: data.name,
+      name: data.name.trim(),
       leaderId: data.leaderId,
+      leaderUserId: matchingUser?.id,
       leaderName: leader?.name ?? 'غير محدد',
-      description: data.description,
-      createdAt: '2026-11-15',
-      baseMemberCount: 1,
+      description: data.description.trim(),
+      createdAt: getTodayIsoDate(),
     };
     setGroups((prev) => [...prev, newGroup]);
-    notify(`تم إنشاء "${data.name}" بنجاح.`);
+    notify(`تم إنشاء "${newGroup.name}" بنجاح.`);
   };
 
   const handleUpdateGroup = (updatedGroup: Group) => {
@@ -197,17 +276,48 @@ export default function App() {
         m.groupId === updatedGroup.id ? { ...m, groupName: updatedGroup.name } : m
       )
     );
+    setPayments((prev) =>
+      prev.map((p) =>
+        p.groupId === updatedGroup.id ? { ...p, groupName: updatedGroup.name } : p
+      )
+    );
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.groupId === updatedGroup.id ? { ...u, groupName: updatedGroup.name } : u
+      )
+    );
     notify(`تم تحديث بيانات "${updatedGroup.name}".`);
   };
 
-  const handleChangeGroupLeader = (groupId: string, newLeaderId: string) => {
+  const handleChangeGroupLeader = (groupId: string, newLeaderId: string, newLeaderUserId?: string) => {
     const leader = members.find((m) => m.id === newLeaderId);
     if (!leader) return;
+    const grp = groups.find((g) => g.id === groupId);
+    const matchedUser =
+      users.find((u) => u.id === newLeaderUserId) ??
+      users.find((u) => u.name === leader.name && u.role === 'رئيس المجموعة');
+
     setGroups((prev) =>
       prev.map((g) =>
-        g.id === groupId ? { ...g, leaderId: leader.id, leaderName: leader.name } : g
+        g.id === groupId
+          ? {
+              ...g,
+              leaderId: leader.id,
+              leaderUserId: matchedUser?.id ?? g.leaderUserId,
+              leaderName: leader.name,
+            }
+          : g
       )
     );
+
+    if (matchedUser && grp) {
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === matchedUser.id ? { ...u, groupId: grp.id, groupName: grp.name } : u
+        )
+      );
+    }
+
     notify(`تم تعيين "${leader.name}" رئيساً للمجموعة.`);
   };
 
@@ -223,62 +333,232 @@ export default function App() {
   };
 
   // Subscription actions
-  const handleAddYearConfig = (cfg: YearConfig) => {
-    setYearConfigs((prev) => [cfg, ...prev].sort((a, b) => b.year - a.year));
-    const newSubs: MemberYearSubscription[] = members.map((m) => ({
-      memberId: m.id,
-      year: cfg.year,
-      foundingStatus: 'overdue',
-      foundingPaidAmount: 0,
-      months: Array(12).fill('upcoming') as MonthCellStatus[],
-    }));
-    setSubscriptions((prev) => [...prev, ...newSubs]);
+  const handleAddYearConfig = (cfg: YearConfig): { ok: boolean; error?: string } => {
+    if (yearConfigs.some((y) => y.year === cfg.year)) {
+      return { ok: false, error: `السنة المالية ${cfg.year} موجودة بالفعل.` };
+    }
+
+    const nextConfigs = [...yearConfigs, cfg].sort((a, b) => a.year - b.year);
+    const newSubs: MemberYearSubscription[] = members.map((m) =>
+      createDefaultSubscription(m.id, cfg.year)
+    );
+
+    const nextSubs = [...subscriptions, ...newSubs];
+    setYearConfigs(nextConfigs);
+    setSubscriptions(nextSubs);
+    syncMembersStatus(nextSubs, nextConfigs);
     notify(`تمت إضافة السنة المالية ${cfg.year} وإعداد رسومها بشكل مستقل.`);
+    return { ok: true };
   };
 
   const handleUpdateYearConfig = (cfg: YearConfig) => {
-    setYearConfigs((prev) => prev.map((y) => (y.year === cfg.year ? cfg : y)));
+    const nextConfigs = yearConfigs.map((y) => (y.year === cfg.year ? cfg : y));
+    const nextSubs = subscriptions.map((sub) =>
+      sub.year === cfg.year ? deriveSubscriptionCellStatuses(sub, cfg) : sub
+    );
+    setYearConfigs(nextConfigs);
+    setSubscriptions(nextSubs);
+    syncMembersStatus(nextSubs, nextConfigs);
     notify(`تم تحديث رسوم السنة المالية ${cfg.year} دون المساس بالسنوات السابقة.`);
   };
 
   const handleToggleMonthStatus = (memberId: string, year: number, monthIndex: number) => {
+    const cfg = yearConfigs.find((y) => y.year === year);
+    if (!cfg) return;
     const order: MonthCellStatus[] = ['paid', 'partial', 'overdue', 'upcoming'];
-    setSubscriptions((prev) =>
-      prev.map((sub) => {
-        if (sub.memberId !== memberId || sub.year !== year) return sub;
-        const nextMonths = [...sub.months];
-        const curr = nextMonths[monthIndex] ?? 'upcoming';
-        const next = order[(order.indexOf(curr) + 1) % order.length];
-        nextMonths[monthIndex] = next;
-        return { ...sub, months: nextMonths };
-      })
-    );
-    notify('تم تحديث حالة اشتراك الشهر في المعاينة.');
+    const hasExisting = subscriptions.some((s) => s.memberId === memberId && s.year === year);
+    const baseSubs = hasExisting
+      ? subscriptions
+      : [...subscriptions, createDefaultSubscription(memberId, year)];
+
+    const nextSubs = baseSubs.map((sub) => {
+      if (sub.memberId !== memberId || sub.year !== year) return sub;
+      const nextMonths = [...sub.months];
+      const nextAmounts = [...(sub.monthPaidAmounts ?? Array(12).fill(0))];
+      const curr = nextMonths[monthIndex] ?? 'upcoming';
+      const next = order[(order.indexOf(curr) + 1) % order.length];
+      nextMonths[monthIndex] = next;
+      nextAmounts[monthIndex] =
+        next === 'paid'
+          ? cfg.monthlyFee
+          : next === 'partial'
+            ? roundCurrency(cfg.monthlyFee / 2)
+            : 0;
+      return deriveSubscriptionCellStatuses(
+        { ...sub, months: nextMonths, monthPaidAmounts: nextAmounts },
+        cfg
+      );
+    });
+    setSubscriptions(nextSubs);
+    syncMembersStatus(nextSubs);
+    notify('تم تحديث حالة اشتراك الشهر.');
   };
 
-  // Payment actions (supports partial payments)
-  const handleAddPayment = (record: Omit<PaymentRecord, 'id'>) => {
-    const newRec: PaymentRecord = { ...record, id: `pay-${Date.now()}` };
-    setPayments((prev) => [newRec, ...prev]);
+  const handleUpdateSubscriptionDetails = (
+    memberId: string,
+    year: number,
+    foundingPaidAmount: number,
+    monthPaidAmounts: number[]
+  ) => {
+    const cfg = yearConfigs.find((y) => y.year === year);
+    if (!cfg) return;
+    const hasExisting = subscriptions.some((s) => s.memberId === memberId && s.year === year);
+    const baseSubs = hasExisting
+      ? subscriptions
+      : [...subscriptions, createDefaultSubscription(memberId, year)];
 
-    if (record.status === 'مدفوع جزئياً') {
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.id === record.memberId
-            ? { ...m, subscriptionStatus: 'مسدد جزئياً' }
-            : m
-        )
+    const nextSubs = baseSubs.map((sub) => {
+      if (sub.memberId !== memberId || sub.year !== year) return sub;
+      return deriveSubscriptionCellStatuses(
+        {
+          ...sub,
+          foundingPaidAmount,
+          monthPaidAmounts,
+        },
+        cfg
       );
+    });
+    setSubscriptions(nextSubs);
+    syncMembersStatus(nextSubs);
+    notify(`تم تحديث تفاصيل اشتراك سنة ${year}.`);
+  };
+
+  // Payment actions (supports partial & multi-installment allocation + edit recalculation)
+  const handleAddPayment = (
+    record: Omit<PaymentRecord, 'id'>
+  ): { ok: boolean; error?: string } => {
+    const cfg = yearConfigs.find((y) => y.year === record.year);
+    if (!cfg) return { ok: false, error: 'السنة المالية غير موجودة.' };
+
+    const foundSub = subscriptions.find(
+      (s) => s.memberId === record.memberId && s.year === record.year
+    );
+    const existingSub = foundSub ?? createDefaultSubscription(record.memberId, record.year);
+    const baseSubs = foundSub ? subscriptions : [...subscriptions, existingSub];
+
+    const currentTotals = computeMemberYearTotals(existingSub, cfg);
+    if (toHalalas(record.amount) <= 0) {
+      return { ok: false, error: 'يجب أن يكون المبلغ المدفوع أكبر من صفر.' };
+    }
+    if (toHalalas(record.amount) > toHalalas(currentTotals.remaining)) {
+      return {
+        ok: false,
+        error: `المبلغ المدفوع (${formatCurrency(record.amount)}) يتجاوز المتبقي على العضو (${formatCurrency(currentTotals.remaining)}).`,
+      };
+    }
+
+    const updatedSub = applyPaymentToSubscription(existingSub, cfg, record.amount, {
+      allocatedToFounding: record.allocatedToFounding,
+      allocatedMonthIndices: record.allocatedMonthIndices,
+    });
+    const afterTotals = computeMemberYearTotals(updatedSub, cfg);
+
+    const newRec: PaymentRecord = {
+      ...record,
+      id: `pay-${Date.now()}`,
+      dueAmount: currentTotals.remaining,
+      remainingAmount: afterTotals.remaining,
+      status: afterTotals.remaining > 0 ? 'مدفوع جزئياً' : 'مكتمل',
+    };
+
+    const nextPayments = [newRec, ...payments];
+    const nextSubs = baseSubs.map((s) =>
+      s.memberId === record.memberId && s.year === record.year ? updatedSub : s
+    );
+
+    const nextTotalRevenue = fromHalalas(
+      nextPayments.reduce((acc, p) => acc + toHalalas(p.amount), 0)
+    );
+
+    setPayments(nextPayments);
+    setSubscriptions(nextSubs);
+    syncMembersStatus(nextSubs);
+    setExpenses((prev) => recalculateExpensesRunningBalance(prev, nextTotalRevenue));
+
+    if (newRec.status === 'مدفوع جزئياً') {
       notify(
-        `تم تسجيل دفعة جزئية بمبلغ ${record.amount} ر.س (المتبقي ${record.remainingAmount} ر.س).`,
+        `تم تسجيل دفعة جزئية بمبلغ ${formatCurrency(newRec.amount)} (المتبقي السنوي ${formatCurrency(newRec.remainingAmount)}).`,
         'warning'
       );
     } else {
-      notify(`تم تسجيل سداد مكتمل بمبلغ ${record.amount} ر.س للعضو ${record.memberName}.`);
+      notify(`تم تسجيل سداد مكتمل بمبلغ ${formatCurrency(newRec.amount)} للعضو ${newRec.memberName}.`);
     }
+    return { ok: true };
   };
 
-  // Qittat actions (supports partial participant payments)
+  const handleUpdatePayment = (
+    updated: PaymentRecord
+  ): { ok: boolean; error?: string } => {
+    const oldRec = payments.find((p) => p.id === updated.id);
+    if (!oldRec) return { ok: false, error: 'عملية السداد غير موجودة.' };
+
+    const oldCfg = yearConfigs.find((y) => y.year === oldRec.year);
+    const newCfg = yearConfigs.find((y) => y.year === updated.year);
+    if (!oldCfg || !newCfg) return { ok: false, error: 'السنة المالية غير صالحة.' };
+
+    if (toHalalas(updated.amount) <= 0) {
+      return { ok: false, error: 'يجب أن يكون المبلغ المدفوع أكبر من صفر.' };
+    }
+
+    // Step 1: Reverse old payment from its subscription
+    let nextSubs = subscriptions.map((s) => {
+      if (s.memberId === oldRec.memberId && s.year === oldRec.year) {
+        return reversePaymentFromSubscription(s, oldCfg, oldRec.amount, {
+          allocatedToFounding: oldRec.allocatedToFounding,
+          allocatedMonthIndices: oldRec.allocatedMonthIndices,
+        });
+      }
+      return s;
+    });
+
+    // Step 2: Validate against target subscription remaining
+    let targetSub = nextSubs.find(
+      (s) => s.memberId === updated.memberId && s.year === updated.year
+    );
+    if (!targetSub) {
+      targetSub = createDefaultSubscription(updated.memberId, updated.year);
+      nextSubs = [...nextSubs, targetSub];
+    }
+    const beforeTargetTotals = computeMemberYearTotals(targetSub, newCfg);
+    if (toHalalas(updated.amount) > toHalalas(beforeTargetTotals.remaining)) {
+      return {
+        ok: false,
+        error: `المبلغ المعدّل (${formatCurrency(updated.amount)}) يتجاوز المتاح للسداد (${formatCurrency(beforeTargetTotals.remaining)}).`,
+      };
+    }
+
+    // Step 3: Apply updated payment
+    const appliedSub = applyPaymentToSubscription(targetSub, newCfg, updated.amount, {
+      allocatedToFounding: updated.allocatedToFounding,
+      allocatedMonthIndices: updated.allocatedMonthIndices,
+    });
+    const afterTargetTotals = computeMemberYearTotals(appliedSub, newCfg);
+
+    nextSubs = nextSubs.map((s) =>
+      s.memberId === updated.memberId && s.year === updated.year ? appliedSub : s
+    );
+
+    const normalizedPayment: PaymentRecord = {
+      ...updated,
+      dueAmount: beforeTargetTotals.remaining,
+      remainingAmount: afterTargetTotals.remaining,
+      status: afterTargetTotals.remaining > 0 ? 'مدفوع جزئياً' : 'مكتمل',
+    };
+
+    const nextPayments = payments.map((p) => (p.id === updated.id ? normalizedPayment : p));
+    const nextTotalRevenue = fromHalalas(
+      nextPayments.reduce((acc, p) => acc + toHalalas(p.amount), 0)
+    );
+
+    setPayments(nextPayments);
+    setSubscriptions(nextSubs);
+    syncMembersStatus(nextSubs);
+    setExpenses((prev) => recalculateExpensesRunningBalance(prev, nextTotalRevenue));
+    notify(`تم تحديث عملية السداد للعضو "${updated.memberName}" وإعادة احتساب الأرصدة.`);
+    return { ok: true };
+  };
+
+  // Qittat actions
   const handleCreateQitta = (qitta: Omit<Qitta, 'id'>) => {
     const newQ: Qitta = { ...qitta, id: `qit-${Date.now()}` };
     setQittat((prev) => [newQ, ...prev]);
@@ -290,21 +570,24 @@ export default function App() {
     memberId: string,
     amountPaidNow: number
   ) => {
+    if (toHalalas(amountPaidNow) <= 0) return;
     setQittat((prev) =>
       prev.map((q) => {
         if (q.id !== qittaId) return q;
         const nextParticipants = q.participants.map((p) => {
           if (p.memberId !== memberId) return p;
-          const totalPaid = Math.min(p.shareAmount, p.paidAmount + amountPaidNow);
+          const totalPaid = Math.min(p.shareAmount, addCurrency(p.paidAmount, amountPaidNow));
           const status: QittaParticipantStatus =
-            totalPaid >= p.shareAmount
+            toHalalas(totalPaid) >= toHalalas(p.shareAmount)
               ? 'سدد كامل المبلغ'
-              : totalPaid > 0
+              : toHalalas(totalPaid) > 0
                 ? 'دفع جزئياً'
                 : 'لم يدفع';
           return { ...p, paidAmount: totalPaid, status };
         });
-        const allPaid = nextParticipants.every((p) => p.paidAmount >= p.shareAmount);
+        const allPaid = nextParticipants.every(
+          (p) => toHalalas(p.paidAmount) >= toHalalas(p.shareAmount)
+        );
         return {
           ...q,
           participants: nextParticipants,
@@ -323,40 +606,93 @@ export default function App() {
   };
 
   const handleDisburseAid = (aidId: string) => {
+    const today = getTodayIsoDate();
     setMarriageAids((prev) =>
       prev.map((a) =>
-        a.id === aidId
-          ? { ...a, status: 'تم الصرف', disbursementDate: '2026-11-15' }
-          : a
+        a.id === aidId ? { ...a, status: 'تم الصرف', disbursementDate: today } : a
       )
     );
     notify('تم اعتماد صرف معونة الزواج وتحديث السجل.');
   };
 
   // Expense actions
-  const handleAddExpense = (exp: Omit<Expense, 'id' | 'operationNumber'>) => {
-    const nextNum = 42 + Math.max(0, expenses.length - 5);
+  const totalFundRevenue = fromHalalas(
+    payments.reduce((acc, p) => acc + toHalalas(p.amount), 0)
+  );
+
+  const handleAddExpense = (exp: Omit<Expense, 'id' | 'operationNumber' | 'balanceBefore' | 'balanceAfter' | 'recordedBy'>) => {
+    const nextSeq =
+      expenses.reduce((max, e) => {
+        const parts = e.operationNumber.split('-');
+        const num = Number(parts[parts.length - 1]);
+        return Number.isFinite(num) ? Math.max(max, num) : max;
+      }, 41) + 1;
+
     const newExp: Expense = {
       ...exp,
       id: `exp-${Date.now()}`,
-      operationNumber: `EXP-2026-0${nextNum}`,
+      operationNumber: `EXP-${exp.year}-${String(nextSeq).padStart(4, '0')}`,
+      balanceBefore: 0,
+      balanceAfter: 0,
+      recordedBy: currentUser.name,
     };
-    setExpenses((prev) => [newExp, ...prev]);
+
+    const nextExpenses = recalculateExpensesRunningBalance(
+      [newExp, ...expenses],
+      totalFundRevenue
+    );
+    setExpenses(nextExpenses);
     notify(`تم تسجيل المصروف "${exp.title}" وتحديث رصيد الصندوق.`);
   };
 
+  const handleUpdateExpense = (updated: Expense) => {
+    const nextExpenses = recalculateExpensesRunningBalance(
+      expenses.map((e) => (e.id === updated.id ? updated : e)),
+      totalFundRevenue
+    );
+    setExpenses(nextExpenses);
+    notify(`تم تحديث بيانات المصروف "${updated.title}" وإعادة احتساب الأرصدة.`);
+  };
+
   // User actions
-  const handleAddUser = (u: Omit<SystemUser, 'id' | 'createdAt'>) => {
+  const handleAddUser = (u: Omit<SystemUser, 'id' | 'createdAt'>): { ok: boolean; error?: string } => {
+    if (users.some((ex) => ex.username.toLowerCase() === u.username.trim().toLowerCase())) {
+      return { ok: false, error: 'اسم المستخدم مسجل مسبقاً.' };
+    }
     const newU: SystemUser = {
       ...u,
+      username: u.username.trim(),
       id: `usr-${Date.now()}`,
-      createdAt: '2026-11-15',
+      createdAt: getTodayIsoDate(),
     };
     setUsers((prev) => [...prev, newU]);
     notify(`تم إنشاء حساب المستخدم "${u.name}" بنجاح.`);
+    return { ok: true };
+  };
+
+  const handleUpdateUser = (updated: SystemUser): { ok: boolean; error?: string } => {
+    if (
+      users.some(
+        (ex) =>
+          ex.id !== updated.id &&
+          ex.username.toLowerCase() === updated.username.trim().toLowerCase()
+      )
+    ) {
+      return { ok: false, error: 'اسم المستخدم مستخدم من حساب آخر.' };
+    }
+    setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
+    if (currentUser.id === updated.id) {
+      setCurrentUser(updated);
+    }
+    notify(`تم تحديث حساب وصلاحيات "${updated.name}".`);
+    return { ok: true };
   };
 
   const handleToggleUserStatus = (userId: string) => {
+    if (userId === currentUser.id) {
+      notify('لا يمكنك تعطيل حسابك الشخصي أثناء تسجيل الدخول.', 'warning');
+      return;
+    }
     setUsers((prev) =>
       prev.map((u) =>
         u.id === userId ? { ...u, status: u.status === 'نشط' ? 'معطل' : 'نشط' } : u
@@ -369,6 +705,8 @@ export default function App() {
     return (
       <LoginPage
         users={users}
+        membersCount={members.length}
+        groupsCount={groups.length}
         onLogin={(matchedUser) => {
           setCurrentUser(matchedUser);
           setIsAuthenticated(true);
@@ -384,14 +722,23 @@ export default function App() {
   const scopedOverdueCount =
     currentUser.role === 'رئيس المجموعة' && currentUser.groupId
       ? members.filter(
-          (m) => m.groupId === currentUser.groupId && m.subscriptionStatus === 'متأخر'
+          (m) =>
+            m.groupId === currentUser.groupId &&
+            m.memberStatus === 'نشط' &&
+            m.subscriptionStatus !== 'مسدد'
         ).length
-      : members.filter((m) => m.subscriptionStatus === 'متأخر').length;
+      : members.filter((m) => m.memberStatus === 'نشط' && m.subscriptionStatus !== 'مسدد').length;
 
   const selectedMemberName =
     activePage === 'members' && selectedMemberId
       ? members.find((m) => m.id === selectedMemberId)?.name
       : undefined;
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setMobileMenuOpen(false);
+    setSelectedMemberId(null);
+  };
 
   return (
     <div className="min-h-screen bg-[#F5F7FA] text-[#172B45]">
@@ -399,7 +746,7 @@ export default function App() {
         activePage={activePage}
         allowedPages={currentUser.permissions}
         onNavigate={handleNavigate}
-        onLogout={() => setIsAuthenticated(false)}
+        onLogout={handleLogout}
         userName={currentUser.name}
         userRole={currentUser.role}
         mobileOpen={mobileMenuOpen}
@@ -414,18 +761,20 @@ export default function App() {
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onNavigate={handleNavigate}
           onSelectMember={handleSelectMemberFromAnywhere}
-          onLogout={() => setIsAuthenticated(false)}
+          onLogout={handleLogout}
           members={members}
+          payments={payments}
+          marriageAids={marriageAids}
           currentUser={currentUser}
-          allUsers={users}
-          onSwitchUser={handleSwitchUser}
         />
 
-        <main className="flex-1 p-4 sm:p-6 pb-20 lg:pb-8 max-w-[1440px] w-full mx-auto">
+        <main className="flex-1 p-3.5 sm:p-6 pb-20 lg:pb-8 max-w-[1440px] w-full mx-auto">
           {activePage === 'dashboard' && (
             <DashboardPage
               members={members}
               groups={groups}
+              yearConfigs={yearConfigs}
+              subscriptions={subscriptions}
               payments={payments}
               expenses={expenses}
               currentUser={currentUser}
@@ -448,7 +797,7 @@ export default function App() {
               onSelectMember={setSelectedMemberId}
               onAddMember={handleAddMember}
               onUpdateMember={handleUpdateMember}
-              onDeleteMember={handleDeleteMember}
+              onToggleArchiveMember={handleToggleArchiveMember}
             />
           )}
 
@@ -456,6 +805,7 @@ export default function App() {
             <GroupsPage
               groups={groups}
               members={members}
+              users={users}
               subscriptions={subscriptions}
               yearConfigs={yearConfigs}
               currentUser={currentUser}
@@ -476,6 +826,7 @@ export default function App() {
               onAddYearConfig={handleAddYearConfig}
               onUpdateYearConfig={handleUpdateYearConfig}
               onToggleMonthStatus={handleToggleMonthStatus}
+              onUpdateSubscriptionDetails={handleUpdateSubscriptionDetails}
               onSelectMember={handleSelectMemberFromAnywhere}
             />
           )}
@@ -484,8 +835,11 @@ export default function App() {
             <PaymentsPage
               payments={payments}
               members={members}
+              groups={groups}
               yearConfigs={yearConfigs}
+              subscriptions={subscriptions}
               onAddPayment={handleAddPayment}
+              onUpdatePayment={handleUpdatePayment}
               onSelectMember={handleSelectMemberFromAnywhere}
             />
           )}
@@ -506,6 +860,7 @@ export default function App() {
             <QittatPage
               qittat={qittat}
               members={members}
+              users={users}
               onCreateQitta={handleCreateQitta}
               onRecordParticipantPayment={handleRecordParticipantPayment}
             />
@@ -525,7 +880,10 @@ export default function App() {
             <ExpensesPage
               expenses={expenses}
               payments={payments}
+              yearConfigs={yearConfigs}
+              currentUser={currentUser}
               onAddExpense={handleAddExpense}
+              onUpdateExpense={handleUpdateExpense}
             />
           )}
 
@@ -539,6 +897,8 @@ export default function App() {
               expenses={expenses}
               qittat={qittat}
               marriageAids={marriageAids}
+              settings={settings}
+              currentUser={currentUser}
               onNotify={(msg) => notify(msg, 'info')}
             />
           )}
@@ -548,6 +908,7 @@ export default function App() {
               users={users}
               groups={groups}
               onAddUser={handleAddUser}
+              onUpdateUser={handleUpdateUser}
               onToggleUserStatus={handleToggleUserStatus}
             />
           )}
@@ -558,13 +919,14 @@ export default function App() {
               yearConfigs={yearConfigs}
               groups={groups}
               users={users}
+              currentUser={currentUser}
               onSaveSettings={(next) => {
                 setSettings(next);
                 notify('تم حفظ إعدادات الصندوق بنجاح.');
               }}
               onUpdateYearConfig={handleUpdateYearConfig}
               onNavigate={handleNavigate}
-              onNotify={(msg) => notify(msg, 'info')}
+              onNotify={(msg, type = 'info') => notify(msg, type)}
             />
           )}
         </main>

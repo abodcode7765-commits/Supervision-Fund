@@ -6,97 +6,268 @@ import {
   Clock,
   CalendarCheck,
   Search,
+  Eye,
+  Pencil,
+  AlertCircle,
 } from 'lucide-react';
 import {
+  Group,
   Member,
+  MemberYearSubscription,
   PaymentMethod,
   PaymentRecord,
   YearConfig,
 } from '../types';
 import { ARABIC_MONTHS } from '../data/mockData';
 import { Modal, PageHeader, StatCard, StatusIndicator } from '../components/ui/SharedUI';
-import { formatCurrency } from '../utils/formatters';
+import {
+  addCurrency,
+  computeMemberYearTotals,
+  createDefaultSubscription,
+  formatCurrency,
+  getDefaultActiveYear,
+  getTodayIsoDate,
+  roundCurrency,
+  subtractCurrency,
+  toHalalas,
+} from '../utils/formatters';
 
 export function PaymentsPage({
   payments,
   members,
+  groups,
   yearConfigs,
+  subscriptions,
   onAddPayment,
+  onUpdatePayment,
   onSelectMember,
 }: {
   payments: PaymentRecord[];
   members: Member[];
+  groups: Group[];
   yearConfigs: YearConfig[];
-  onAddPayment: (record: Omit<PaymentRecord, 'id'>) => void;
+  subscriptions: MemberYearSubscription[];
+  onAddPayment: (record: Omit<PaymentRecord, 'id'>) => { ok: boolean; error?: string };
+  onUpdatePayment: (record: PaymentRecord) => { ok: boolean; error?: string };
   onSelectMember: (memberId: string) => void;
 }) {
   const [search, setSearch] = useState('');
   const [yearFilter, setYearFilter] = useState<string>('all');
+  const [groupFilter, setGroupFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+
   const [modalOpen, setModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<PaymentRecord | null>(null);
+  const [detailPayment, setDetailPayment] = useState<PaymentRecord | null>(null);
 
   const [memberId, setMemberId] = useState(members[0]?.id ?? '');
-  const [year, setYear] = useState(yearConfigs[0]?.year ?? 2026);
-  const [selectedMonths, setSelectedMonths] = useState<string[]>(['أغسطس', 'سبتمبر', 'أكتوبر']);
-  const [dueAmount, setDueAmount] = useState(300);
-  const [paidAmount, setPaidAmount] = useState(100);
+  const [year, setYear] = useState(() => getDefaultActiveYear(yearConfigs));
+  const [includeFounding, setIncludeFounding] = useState(true);
+  const [selectedMonthIndices, setSelectedMonthIndices] = useState<number[]>([]);
+  const [paidAmount, setPaidAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('تحويل بنكي');
-  const [date, setDate] = useState('2026-11-15');
+  const [date, setDate] = useState(getTodayIsoDate());
   const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const remainingCalc = Math.max(0, dueAmount - paidAmount);
-  const derivedStatus = remainingCalc > 0 ? 'مدفوع جزئياً' : 'مكتمل';
+  // Real dynamic KPIs
+  const totalPaidAll = addCurrency(...payments.map((p) => p.amount));
+  const operationsCount = payments.length;
+  const currentMonthPrefix = getTodayIsoDate().slice(0, 7);
+  const thisMonthCount = payments.filter((p) => p.date.startsWith(currentMonthPrefix)).length;
 
-  const totalPaid = 35400 + payments.slice(9).reduce((s, p) => s + p.amount, 0);
-  const operationsCount = 148 + Math.max(0, payments.length - 9);
-  const remainingPartialTotal = payments.reduce((s, p) => s + p.remainingAmount, 0);
-  const thisMonthCount = payments.filter((p) => p.date.startsWith('2026-11')).length + 18;
+  // Real remaining partial arrears across subscriptions for active current year
+  const latestYear = getDefaultActiveYear(yearConfigs);
+  const latestCfg = yearConfigs.find((y) => y.year === latestYear);
+  const totalOutstandingSubscriptions = addCurrency(
+    ...members.map((m) => {
+      const sub =
+        subscriptions.find((s) => s.memberId === m.id && s.year === latestYear) ??
+        createDefaultSubscription(m.id, latestYear);
+      return computeMemberYearTotals(sub, latestCfg).remaining;
+    })
+  );
 
-  const toggleMonth = (month: string) => {
-    const cfg = yearConfigs.find((y) => y.year === year);
-    const monthlyFee = cfg?.monthlyFee ?? 50;
-    const next = selectedMonths.includes(month)
-      ? selectedMonths.filter((m) => m !== month)
-      : [...selectedMonths, month];
-    setSelectedMonths(next);
-    const computedDue = Math.max(monthlyFee, next.length * monthlyFee);
-    setDueAmount(computedDue);
-    setPaidAmount(computedDue);
+  // Selected member & year subscription calculation for modal preview
+  const activeCfg = yearConfigs.find((y) => y.year === year) ?? yearConfigs[0];
+  const currentSub =
+    subscriptions.find((s) => s.memberId === memberId && s.year === year) ??
+    (memberId ? createDefaultSubscription(memberId, year) : undefined);
+  const currentTotals = computeMemberYearTotals(currentSub, activeCfg);
+
+  const availableRemainingForModal = editingPayment
+    ? addCurrency(
+        currentTotals.remaining,
+        editingPayment.memberId === memberId && editingPayment.year === year
+          ? editingPayment.amount
+          : 0
+      )
+    : currentTotals.remaining;
+
+  const openAddModal = () => {
+    const defaultMember = members[0];
+    const defaultYear = getDefaultActiveYear(yearConfigs);
+    const sub = defaultMember
+      ? subscriptions.find(
+          (s) => s.memberId === defaultMember.id && s.year === defaultYear
+        ) ?? createDefaultSubscription(defaultMember.id, defaultYear)
+      : undefined;
+    const cfg = yearConfigs.find((y) => y.year === defaultYear);
+    const totals = computeMemberYearTotals(sub, cfg);
+
+    setEditingPayment(null);
+    setMemberId(defaultMember?.id ?? '');
+    setYear(defaultYear);
+    setIncludeFounding(totals.foundingRemaining > 0);
+    setSelectedMonthIndices(totals.unpaidMonthIndices.slice(0, 1));
+    setPaidAmount(totals.remaining);
+    setPaymentMethod('تحويل بنكي');
+    setDate(getTodayIsoDate());
+    setNotes('');
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const openEditModal = (pay: PaymentRecord) => {
+    setEditingPayment(pay);
+    setMemberId(pay.memberId);
+    setYear(pay.year);
+    setIncludeFounding((pay.allocatedToFounding ?? 0) > 0);
+    setSelectedMonthIndices(pay.allocatedMonthIndices ?? []);
+    setPaidAmount(pay.amount);
+    setPaymentMethod(pay.paymentMethod);
+    setDate(pay.date);
+    setNotes(pay.notes);
+    setFormError('');
+    setModalOpen(true);
+  };
+
+  const handleMemberOrYearChange = (nextMemberId: string, nextYear: number) => {
+    setMemberId(nextMemberId);
+    setYear(nextYear);
+    setFormError('');
+    if (!editingPayment) {
+      const sub = nextMemberId
+        ? subscriptions.find(
+            (s) => s.memberId === nextMemberId && s.year === nextYear
+          ) ?? createDefaultSubscription(nextMemberId, nextYear)
+        : undefined;
+      const cfg = yearConfigs.find((y) => y.year === nextYear);
+      const totals = computeMemberYearTotals(sub, cfg);
+      setIncludeFounding(totals.foundingRemaining > 0);
+      setSelectedMonthIndices(totals.unpaidMonthIndices.slice(0, 1));
+      setPaidAmount(totals.remaining);
+    }
+  };
+
+  const toggleMonthIndex = (idx: number) => {
+    setSelectedMonthIndices((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx].sort((a, b) => a - b)
+    );
+  };
+
+  const buildLabelFromSelection = (isPartial: boolean) => {
+    const parts: string[] = [];
+    if (includeFounding && currentTotals.foundingRemaining > 0) {
+      parts.push('رسوم التأسيس');
+    }
+    if (selectedMonthIndices.length > 0) {
+      parts.push(selectedMonthIndices.map((i) => ARABIC_MONTHS[i]).join(' - '));
+    }
+    if (parts.length === 0) {
+      parts.push(`سداد اشتراك ${year}`);
+    }
+    return `${parts.join(' + ')}${isPartial ? ' (دفعة جزئية)' : ''}`;
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const member = members.find((m) => m.id === memberId);
-    if (!member || paidAmount <= 0) return;
+    if (!member) {
+      setFormError('يرجى اختيار عضو صحيح.');
+      return;
+    }
+    if (toHalalas(paidAmount) <= 0) {
+      setFormError('يجب إدخال مبلغ مدفوع أكبر من صفر.');
+      return;
+    }
+    if (toHalalas(paidAmount) > toHalalas(availableRemainingForModal)) {
+      setFormError(
+        `المبلغ المدفوع (${formatCurrency(paidAmount)}) يتجاوز إجمالي المتبقي على العضو (${formatCurrency(availableRemainingForModal)}).`
+      );
+      return;
+    }
 
-    const actualPaid = Math.min(paidAmount, dueAmount);
-    const actualRemaining = Math.max(0, dueAmount - actualPaid);
-    const finalStatus = actualRemaining > 0 ? 'مدفوع جزئياً' : 'مكتمل';
+    setIsSubmitting(true);
+    try {
+      const remAfter = Math.max(0, subtractCurrency(availableRemainingForModal, paidAmount));
+      const isPartial = toHalalas(remAfter) > 0;
+      const allocFounding =
+        includeFounding && currentTotals.foundingRemaining > 0
+          ? Math.min(roundCurrency(paidAmount), currentTotals.foundingRemaining)
+          : 0;
 
-    onAddPayment({
-      memberId: member.id,
-      memberName: member.name,
-      nationalId: member.nationalId,
-      groupName: member.groupName,
-      year,
-      monthsLabel:
-        selectedMonths.length > 0
-          ? `${selectedMonths.join(' - ')}${actualRemaining > 0 ? ' (دفعة جزئية)' : ''}`
-          : 'دفعة اشتراك',
-      dueAmount,
-      amount: actualPaid,
-      remainingAmount: actualRemaining,
-      paymentMethod,
-      date,
-      status: finalStatus,
-      notes:
-        notes.trim() ||
-        (actualRemaining > 0
-          ? `سداد جزئي بمبلغ ${actualPaid} ر.س من أصل ${dueAmount} ر.س.`
-          : 'سداد مكتمل.'),
-    });
-    setModalOpen(false);
-    setNotes('');
+      if (editingPayment) {
+        const res = onUpdatePayment({
+          ...editingPayment,
+          memberId: member.id,
+          memberName: member.name,
+          nationalId: member.nationalId,
+          groupId: member.groupId,
+          groupName: member.groupName,
+          year,
+          monthsLabel: buildLabelFromSelection(isPartial),
+          allocatedToFounding: allocFounding,
+          allocatedMonthIndices: selectedMonthIndices,
+          dueAmount: availableRemainingForModal,
+          amount: roundCurrency(paidAmount),
+          remainingAmount: remAfter,
+          paymentMethod,
+          date,
+          status: isPartial ? 'مدفوع جزئياً' : 'مكتمل',
+          notes: notes.trim() || editingPayment.notes,
+        });
+        if (!res.ok) {
+          setFormError(res.error ?? 'تعذر تحديث السداد.');
+          return;
+        }
+      } else {
+        const res = onAddPayment({
+          memberId: member.id,
+          memberName: member.name,
+          nationalId: member.nationalId,
+          groupId: member.groupId,
+          groupName: member.groupName,
+          year,
+          monthsLabel: buildLabelFromSelection(isPartial),
+          allocatedToFounding: allocFounding,
+          allocatedMonthIndices: selectedMonthIndices,
+          dueAmount: availableRemainingForModal,
+          amount: roundCurrency(paidAmount),
+          remainingAmount: remAfter,
+          paymentMethod,
+          date,
+          status: isPartial ? 'مدفوع جزئياً' : 'مكتمل',
+          notes:
+            notes.trim() ||
+            (isPartial
+              ? `سداد جزئي بمبلغ ${formatCurrency(paidAmount)} والمتبقي السنوي ${formatCurrency(remAfter)}.`
+              : `سداد مكتمل لسنة ${year}.`),
+        });
+        if (!res.ok) {
+          setFormError(res.error ?? 'تعذر تسجيل السداد.');
+          return;
+        }
+      }
+
+      setModalOpen(false);
+      setNotes('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const filtered = payments.filter((p) => {
@@ -105,22 +276,34 @@ export function PaymentsPage({
       !q ||
       p.memberName.includes(q) ||
       p.nationalId.includes(q) ||
-      p.groupName.includes(q);
+      p.groupName.includes(q) ||
+      p.monthsLabel.includes(q);
     const matchesYear = yearFilter === 'all' || String(p.year) === yearFilter;
+    const grp = groups.find((g) => g.id === groupFilter);
+    const matchesGroup =
+      groupFilter === 'all' || p.groupId === groupFilter || p.groupName === grp?.name;
     const matchesStatus = statusFilter === 'all' || p.status === statusFilter;
-    return matchesSearch && matchesYear && matchesStatus;
+    return matchesSearch && matchesYear && matchesGroup && matchesStatus;
   });
 
+  const modalRemainingPreview = Math.max(
+    0,
+    subtractCurrency(
+      availableRemainingForModal,
+      Math.max(0, Number.isFinite(paidAmount) ? paidAmount : 0)
+    )
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <PageHeader
         title="سجل السداد والمدفوعات"
-        description="تسجيل المدفوعات الكاملة والجزئية ومتابعة المبالغ المستحقة والمدفوعة والمتبقية."
+        description="تسجيل المدفوعات الكاملة والجزئية وربطها المباشر بجدول اشتراكات العضو ومتأخراته."
         action={
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
+            onClick={openAddModal}
+            className="w-full sm:w-auto h-10 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>تسجيل سداد جديد</span>
@@ -129,11 +312,11 @@ export function PaymentsPage({
       />
 
       {/* Top Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 sm:gap-4">
         <StatCard
           title="إجمالي المبالغ المسددة"
-          value={formatCurrency(totalPaid)}
-          subtitle="مجموع التحصيل الموثق بالصندوق"
+          value={formatCurrency(totalPaidAll)}
+          subtitle="مجموع التحصيل الفعلي المسجل"
           icon={Wallet}
           accent="green"
         />
@@ -145,38 +328,38 @@ export function PaymentsPage({
           accent="royal"
         />
         <StatCard
-          title="المبالغ المتبقية من الدفعات"
-          value={formatCurrency(remainingPartialTotal)}
-          subtitle="متبقي السداد الجزئي في السجل"
+          title={`المتبقي للتحصيل (${latestYear})`}
+          value={formatCurrency(totalOutstandingSubscriptions)}
+          subtitle="إجمالي المتبقي على الأعضاء في السنة الحالية"
           icon={Clock}
           accent="amber"
         />
         <StatCard
-          title="عمليات السداد لهذا الشهر"
+          title="عمليات هذا الشهر"
           value={`${thisMonthCount} عملية`}
-          subtitle="شهر نوفمبر 2026"
+          subtitle={`الشهر الحالي (${currentMonthPrefix})`}
           icon={CalendarCheck}
           accent="blue"
         />
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200/80 p-4 grid grid-cols-1 md:grid-cols-12 gap-3">
-        <div className="md:col-span-6 relative">
+      <div className="bg-white rounded-xl border border-slate-200/80 p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+        <div className="lg:col-span-5 relative">
           <Search className="w-4 h-4 text-[#748399] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="ابحث باسم العضو، رقم الهوية، أو المجموعة..."
+            placeholder="ابحث باسم العضو، رقم الهوية، أو البيان..."
             className="w-full h-11 pr-10 pl-4 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm focus:bg-white focus:outline-none focus:border-[#2878C8]"
           />
         </div>
-        <div className="md:col-span-3">
+        <div className="lg:col-span-2">
           <select
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
-            className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm font-medium focus:outline-none focus:border-[#2878C8]"
+            className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm font-medium focus:outline-none focus:border-[#2878C8]"
           >
             <option value="all">جميع السنوات</option>
             {yearConfigs.map((y) => (
@@ -186,11 +369,25 @@ export function PaymentsPage({
             ))}
           </select>
         </div>
-        <div className="md:col-span-3">
+        <div className="lg:col-span-3">
+          <select
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+            className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm font-medium focus:outline-none focus:border-[#2878C8]"
+          >
+            <option value="all">جميع المجموعات</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="lg:col-span-2">
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm font-medium focus:outline-none focus:border-[#2878C8]"
+            className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm font-medium focus:outline-none focus:border-[#2878C8]"
           >
             <option value="all">جميع الحالات</option>
             <option value="مكتمل">مكتمل</option>
@@ -209,12 +406,13 @@ export function PaymentsPage({
                 <th className="py-3.5 px-4">المجموعة</th>
                 <th className="py-3.5 px-4">السنة</th>
                 <th className="py-3.5 px-4">الأشهر / البيان</th>
-                <th className="py-3.5 px-4">المستحق</th>
+                <th className="py-3.5 px-4">المستحق قبل</th>
                 <th className="py-3.5 px-4">المدفوع</th>
-                <th className="py-3.5 px-4">المتبقي</th>
+                <th className="py-3.5 px-4">المتبقي بعد</th>
                 <th className="py-3.5 px-4">طريقة الدفع</th>
-                <th className="py-3.5 px-4">تاريخ السداد</th>
+                <th className="py-3.5 px-4">التاريخ</th>
                 <th className="py-3.5 px-4">الحالة</th>
+                <th className="py-3.5 px-4 text-center">إجراء</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
@@ -261,6 +459,26 @@ export function PaymentsPage({
                       tone={pay.status === 'مكتمل' ? 'success' : 'warning'}
                     />
                   </td>
+                  <td className="py-3.5 px-4 whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setDetailPayment(pay)}
+                        title="عرض تفاصيل السداد"
+                        className="p-2 rounded-lg text-[#2878C8] hover:bg-[#EAF3FC] cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(pay)}
+                        title="تعديل عملية السداد"
+                        className="p-2 rounded-lg text-[#172B45] hover:bg-slate-100 cursor-pointer"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -268,20 +486,20 @@ export function PaymentsPage({
         </div>
       </div>
 
-      {/* Mobile Cards */}
+      {/* Mobile Cards (Uniform height and equal action button sizing) */}
       <div className="md:hidden space-y-3">
         {filtered.map((pay) => (
           <div key={pay.id} className="bg-white rounded-xl border border-slate-200/80 p-4 space-y-2.5">
             <div className="flex items-start justify-between gap-2">
-              <div>
+              <div className="min-w-0">
                 <button
                   type="button"
                   onClick={() => onSelectMember(pay.memberId)}
-                  className="text-sm font-bold text-[#123B70]"
+                  className="text-sm font-bold text-[#123B70] truncate block"
                 >
                   {pay.memberName}
                 </button>
-                <div className="text-[11px] text-[#748399]">
+                <div className="text-[11px] text-[#748399] truncate">
                   {pay.groupName} · {pay.paymentMethod}
                 </div>
               </div>
@@ -292,12 +510,12 @@ export function PaymentsPage({
             </div>
 
             <div className="text-xs text-[#172B45]">
-              {pay.year} · {pay.monthsLabel}
+              <span className="font-bold tabular-nums">{pay.year}</span> · {pay.monthsLabel}
             </div>
 
             <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-[#F8FAFC] text-center text-[11px] tabular-nums">
               <div>
-                <div className="text-[#748399]">المستحق</div>
+                <div className="text-[#748399]">المستحق قبل</div>
                 <div className="font-bold text-[#172B45]">{formatCurrency(pay.dueAmount)}</div>
               </div>
               <div>
@@ -305,7 +523,7 @@ export function PaymentsPage({
                 <div className="font-bold text-[#16A36A]">{formatCurrency(pay.amount)}</div>
               </div>
               <div>
-                <div className="text-[#748399]">المتبقي</div>
+                <div className="text-[#748399]">المتبقي بعد</div>
                 <div
                   className={`font-bold ${
                     pay.remainingAmount > 0 ? 'text-[#DC5555]' : 'text-[#748399]'
@@ -316,27 +534,129 @@ export function PaymentsPage({
               </div>
             </div>
 
-            <div className="text-[11px] text-[#748399] tabular-nums text-left">{pay.date}</div>
+            <div className="flex items-center justify-between text-[11px] text-[#748399] tabular-nums">
+              <span>تاريخ العملية: {pay.date}</span>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setDetailPayment(pay)}
+                className="h-9 rounded-lg bg-[#EAF3FC] text-[#2878C8] text-xs font-bold flex items-center justify-center gap-1.5"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>التفاصيل</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openEditModal(pay)}
+                className="h-9 rounded-lg bg-slate-100 text-[#172B45] text-xs font-bold flex items-center justify-center gap-1.5"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>تعديل</span>
+              </button>
+            </div>
           </div>
         ))}
       </div>
 
-      {/* Record Payment Modal with Partial Payment Support */}
+      {/* View Payment Details Modal */}
+      <Modal
+        isOpen={Boolean(detailPayment)}
+        onClose={() => setDetailPayment(null)}
+        title="تفاصيل عملية السداد"
+        subtitle={detailPayment?.memberName}
+        size="sm"
+      >
+        {detailPayment && (
+          <div className="space-y-4 text-xs">
+            <div className="p-4 rounded-xl bg-[#F8FAFC] border border-slate-200/80 space-y-2.5">
+              <div className="flex justify-between">
+                <span className="text-[#748399]">العضو:</span>
+                <strong className="text-[#123B70]">{detailPayment.memberName}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">المجموعة:</span>
+                <strong>{detailPayment.groupName}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">السنة المالية:</span>
+                <strong className="tabular-nums">{detailPayment.year}</strong>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-[#748399] shrink-0">البيان:</span>
+                <strong className="text-left">{detailPayment.monthsLabel}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">المستحق قبل السداد:</span>
+                <strong className="tabular-nums">{formatCurrency(detailPayment.dueAmount)}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">المبلغ المدفوع:</span>
+                <strong className="text-[#16A36A] tabular-nums">
+                  {formatCurrency(detailPayment.amount)}
+                </strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">المتبقي بعد السداد:</span>
+                <strong className="text-[#DC5555] tabular-nums">
+                  {formatCurrency(detailPayment.remainingAmount)}
+                </strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">طريقة الدفع:</span>
+                <strong>{detailPayment.paymentMethod}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#748399]">تاريخ السداد:</span>
+                <strong className="tabular-nums">{detailPayment.date}</strong>
+              </div>
+            </div>
+
+            {detailPayment.notes && (
+              <div className="p-3 rounded-xl border border-slate-200 text-[#748399]">
+                <div className="font-bold text-[#172B45] mb-1">ملاحظات:</div>
+                {detailPayment.notes}
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDetailPayment(null)}
+                className="h-10 px-5 rounded-xl bg-[#2878C8] text-white font-bold cursor-pointer"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Record / Edit Payment Modal */}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        title="تسجيل سداد جديد (دعم الدفع الكامل والجزئي)"
-        subtitle="أدخل المبلغ المستحق والمبلغ المدفوع ليتم حساب المتبقي وتحديد الحالة تلقائياً"
+        title={editingPayment ? 'تعديل عملية السداد' : 'تسجيل سداد جديد (دعم الدفع الكامل والجزئي)'}
+        subtitle="ينعكس المبلغ المدفوع مباشرة على اشتراك العضو ومتأخراته ورصيد الصندوق"
         size="lg"
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {formError && (
+            <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/25 text-[#DC5555] text-xs font-semibold flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">اختيار العضو</label>
               <select
                 value={memberId}
-                onChange={(e) => setMemberId(e.target.value)}
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
+                disabled={Boolean(editingPayment)}
+                onChange={(e) => handleMemberOrYearChange(e.target.value, year)}
+                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm disabled:bg-slate-100 focus:outline-none focus:border-[#2878C8]"
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -349,31 +669,73 @@ export function PaymentsPage({
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">السنة المالية</label>
               <select
                 value={year}
-                onChange={(e) => setYear(Number(e.target.value))}
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
+                disabled={Boolean(editingPayment)}
+                onChange={(e) => handleMemberOrYearChange(memberId, Number(e.target.value))}
+                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm disabled:bg-slate-100 focus:outline-none focus:border-[#2878C8]"
               >
                 {yearConfigs.map((y) => (
                   <option key={y.year} value={y.year}>
-                    {y.year} (الاشتراك الشهري {y.monthlyFee} ر.س)
+                    {y.year} (التأسيس {y.foundingFee} + الشهري {y.monthlyFee} ر.س)
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
+          {/* Live Member Annual Account Snapshot */}
+          <div className="grid grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#F8FAFC] border border-slate-200 text-center text-xs tabular-nums">
+            <div>
+              <div className="text-[11px] text-[#748399]">إجمالي السنة</div>
+              <div className="font-bold text-[#172B45] mt-0.5">
+                {formatCurrency(currentTotals.totalDue)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-[#748399]">المسدد مسبقاً</div>
+              <div className="font-bold text-[#16A36A] mt-0.5">
+                {formatCurrency(currentTotals.totalPaid)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] text-[#748399]">المتبقي القابل للسداد</div>
+              <div className="font-bold text-[#DC5555] mt-0.5">
+                {formatCurrency(availableRemainingForModal)}
+              </div>
+            </div>
+          </div>
+
           <div>
-            <label className="block text-xs font-bold text-[#172B45] mb-2">
-              الأشهر التي تغطيها الدفعة
-            </label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+              <label className="text-xs font-bold text-[#172B45]">
+                توجيه السداد (اختياري — يتوزع تلقائياً إن لم تحدد)
+              </label>
+              {currentTotals.foundingRemaining > 0 && (
+                <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#123B70] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={includeFounding}
+                    onChange={(e) => setIncludeFounding(e.target.checked)}
+                    className="w-4 h-4 accent-[#2878C8]"
+                  />
+                  <span>يشمل رسوم التأسيس ({formatCurrency(currentTotals.foundingRemaining)})</span>
+                </label>
+              )}
+            </div>
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {ARABIC_MONTHS.map((m) => {
-                const checked = selectedMonths.includes(m);
+              {ARABIC_MONTHS.map((m, idx) => {
+                const checked = selectedMonthIndices.includes(idx);
+                const monthPaid = currentTotals.monthPaidAmounts[idx] ?? 0;
+                const isAlreadyPaid =
+                  !editingPayment &&
+                  activeCfg &&
+                  toHalalas(monthPaid) >= toHalalas(activeCfg.monthlyFee);
                 return (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => toggleMonth(m)}
-                    className={`py-2 px-2.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer ${
+                    disabled={isAlreadyPaid}
+                    onClick={() => toggleMonthIndex(idx)}
+                    className={`h-9 px-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-45 disabled:cursor-not-allowed ${
                       checked
                         ? 'bg-[#2878C8] text-white border-[#2878C8]'
                         : 'bg-[#F8FAFC] text-[#172B45] border-slate-200 hover:border-[#2878C8]'
@@ -386,21 +748,7 @@ export function PaymentsPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-            <div>
-              <label className="block text-xs font-bold text-[#172B45] mb-1.5">
-                إجمالي المبلغ المستحق (ر.س)
-              </label>
-              <input
-                type="number"
-                required
-                min={1}
-                value={dueAmount}
-                onChange={(e) => setDueAmount(Number(e.target.value))}
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm font-bold tabular-nums focus:outline-none focus:border-[#2878C8]"
-              />
-            </div>
-
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">
                 المبلغ المدفوع فعلياً (ر.س)
@@ -408,41 +756,30 @@ export function PaymentsPage({
               <input
                 type="number"
                 required
-                min={1}
-                max={dueAmount}
+                min={0.01}
+                step="0.01"
                 value={paidAmount}
-                onChange={(e) => setPaidAmount(Number(e.target.value))}
+                onChange={(e) => {
+                  setPaidAmount(Number(e.target.value) || 0);
+                  setFormError('');
+                }}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm font-bold text-[#16A36A] tabular-nums focus:outline-none focus:border-[#2878C8]"
               />
             </div>
 
             <div>
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">
-                المبلغ المتبقي (تلقائي)
+                المتبقي على العضو بعد الدفعة
               </label>
               <div className="h-11 px-3.5 rounded-xl border border-slate-200 bg-[#F8FAFC] flex items-center justify-between text-sm font-bold tabular-nums">
-                <span className={remainingCalc > 0 ? 'text-[#DC5555]' : 'text-[#16A36A]'}>
-                  {formatCurrency(remainingCalc)}
+                <span className={modalRemainingPreview > 0 ? 'text-[#DC5555]' : 'text-[#16A36A]'}>
+                  {formatCurrency(modalRemainingPreview)}
+                </span>
+                <span className="text-[11px] font-semibold text-[#748399]">
+                  {modalRemainingPreview > 0 ? 'مدفوع جزئياً' : 'مكتمل'}
                 </span>
               </div>
             </div>
-          </div>
-
-          {/* Live Partial Payment Preview Strip */}
-          <div
-            className={`p-3 rounded-xl border text-xs flex flex-wrap items-center justify-between gap-2 ${
-              remainingCalc > 0
-                ? 'bg-[#E99A35]/12 border-[#E99A35]/35 text-[#9A5B0D]'
-                : 'bg-[#16A36A]/10 border-[#16A36A]/25 text-[#16A36A]'
-            }`}
-          >
-            <span>
-              حالة السداد المحتسبة: <strong>{derivedStatus}</strong>
-            </span>
-            <span className="tabular-nums">
-              المستحق: {formatCurrency(dueAmount)} · المدفوع: {formatCurrency(paidAmount)} ·
-              المتبقي: {formatCurrency(remainingCalc)}
-            </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
@@ -485,15 +822,16 @@ export function PaymentsPage({
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 text-sm font-semibold text-[#172B45] cursor-pointer"
+              className="h-10 px-4 rounded-xl bg-slate-100 text-sm font-semibold text-[#172B45] cursor-pointer"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-sm font-semibold text-white cursor-pointer"
+              disabled={isSubmitting || availableRemainingForModal <= 0}
+              className="h-10 px-5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] disabled:opacity-50 text-sm font-semibold text-white cursor-pointer"
             >
-              حفظ الدفعة
+              {editingPayment ? 'حفظ التعديلات' : 'حفظ الدفعة'}
             </button>
           </div>
         </form>

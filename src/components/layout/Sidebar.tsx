@@ -89,7 +89,7 @@ export function Sidebar({
       </div>
 
       {/* Navigation Links */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+      <nav className="flex-1 overflow-y-auto sidebar-scroll px-3 py-4 space-y-1">
         {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = activePage === item.id;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Plus,
   HeartHandshake,
@@ -6,10 +6,17 @@ import {
   CheckCircle2,
   Clock,
   Eye,
+  Search,
+  Info,
 } from 'lucide-react';
 import { MarriageAid, MarriageAidStatus, Member } from '../types';
 import { Modal, PageHeader, StatCard, StatusIndicator } from '../components/ui/SharedUI';
-import { formatCurrency } from '../utils/formatters';
+import {
+  addCurrency,
+  formatCurrency,
+  getTodayIsoDate,
+  subtractCurrency,
+} from '../utils/formatters';
 
 export function MarriageAidPage({
   marriageAids,
@@ -27,29 +34,62 @@ export function MarriageAidPage({
   const [modalOpen, setModalOpen] = useState(false);
   const [detailAid, setDetailAid] = useState<MarriageAid | null>(null);
 
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | MarriageAidStatus>('all');
+
   const [memberId, setMemberId] = useState(members[0]?.id ?? '');
   const [amount, setAmount] = useState(5000);
-  const [dueDate, setDueDate] = useState('2026-12-01');
+  const [dueDate, setDueDate] = useState(getTodayIsoDate());
   const [disbursementDate, setDisbursementDate] = useState('');
   const [status, setStatus] = useState<MarriageAidStatus>('مستحقة');
   const [notes, setNotes] = useState('');
+  const [formError, setFormError] = useState('');
 
-  const totalAmount = marriageAids.reduce((s, a) => s + a.amount, 0);
-  const disbursedAmount = marriageAids
-    .filter((a) => a.status === 'تم الصرف')
-    .reduce((s, a) => s + a.amount, 0);
-  const remainingAmount = Math.max(0, totalAmount - disbursedAmount);
+  const filteredAids = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return marriageAids.filter((aid) => {
+      const matchSearch =
+        !q ||
+        aid.memberName.toLowerCase().includes(q) ||
+        aid.nationalId.includes(q);
+      const matchStatus = statusFilter === 'all' || aid.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [marriageAids, search, statusFilter]);
+
+  const totalAmount = useMemo(
+    () => addCurrency(...filteredAids.map((a) => a.amount)),
+    [filteredAids]
+  );
+  const disbursedAmount = useMemo(
+    () =>
+      addCurrency(
+        ...filteredAids.filter((a) => a.status === 'تم الصرف').map((a) => a.amount)
+      ),
+    [filteredAids]
+  );
+  const remainingAmount = Math.max(0, subtractCurrency(totalAmount, disbursedAmount));
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    const member = members.find((m) => m.id === memberId);
-    if (!member) return;
+    setFormError('');
+    const targetMemberId = memberId || members[0]?.id || '';
+    const member = members.find((m) => m.id === targetMemberId);
+    if (!member) {
+      setFormError('يرجى اختيار عضو مستفيد صحيح.');
+      return;
+    }
+    const safeAmt = Number.isFinite(amount) ? amount : 0;
+    if (safeAmt < 500) {
+      setFormError('يجب أن لا تقل قيمة المعونة عن 500 ر.س.');
+      return;
+    }
     onAddMarriageAid({
       memberId: member.id,
       memberName: member.name,
       nationalId: member.nationalId,
       birthDate: member.birthDate,
-      amount,
+      amount: safeAmt,
       dueDate,
       disbursementDate: status === 'تم الصرف' ? disbursementDate || dueDate : '—',
       status,
@@ -67,8 +107,17 @@ export function MarriageAidPage({
         action={
           <button
             type="button"
-            onClick={() => setModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
+            onClick={() => {
+              setMemberId(members[0]?.id ?? '');
+              setAmount(5000);
+              setDueDate(getTodayIsoDate());
+              setDisbursementDate('');
+              setStatus('مستحقة');
+              setNotes('');
+              setFormError('');
+              setModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             <span>تسجيل معونة جديدة</span>
@@ -76,12 +125,21 @@ export function MarriageAidPage({
         }
       />
 
+      {/* Accounting Policy Note Banner */}
+      <div className="bg-[#EAF3FC] border border-[#4A90D9]/35 rounded-xl px-4 py-3 flex items-start sm:items-center gap-2.5 text-xs text-[#123B70]">
+        <Info className="w-4 h-4 text-[#2878C8] shrink-0 mt-0.5 sm:mt-0" />
+        <span>
+          <strong>ملاحظة تنظيمية:</strong> سجل معونة الزواج يُدار كبند مستقل لمتابعة الاستحقاق
+          والصرف، ولا يُخصم تلقائياً من رصيد الصندوق العام إلا عند توثيق سند صرف في قسم المصروفات.
+        </span>
+      </div>
+
       {/* Top KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard
           title="عدد المستفيدين"
-          value={`${marriageAids.length} مستفيدين`}
-          subtitle="إجمالي المسجلين في معونة الزواج"
+          value={`${filteredAids.length} مستفيدين`}
+          subtitle="وفق التصفية الحالية"
           icon={Users}
           accent="royal"
         />
@@ -108,6 +166,30 @@ export function MarriageAidPage({
         />
       </div>
 
+      {/* Search & Status Filter */}
+      <div className="bg-white rounded-xl border border-slate-200/80 p-3.5 sm:p-4 shadow-[0_1px_3px_rgba(18,59,112,0.04)] grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative sm:col-span-2">
+          <Search className="w-4 h-4 text-[#748399] absolute right-3.5 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="بحث باسم العضو أو رقم الهوية..."
+            className="w-full h-10 pr-10 pl-3 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm focus:outline-none focus:border-[#2878C8]"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as 'all' | MarriageAidStatus)}
+          className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm font-medium focus:outline-none focus:border-[#2878C8]"
+        >
+          <option value="all">جميع الحالات</option>
+          <option value="مستحقة">مستحقة</option>
+          <option value="تم الصرف">تم الصرف</option>
+          <option value="قيد الانتظار">قيد الانتظار</option>
+        </select>
+      </div>
+
       {/* Desktop Table */}
       <div className="hidden md:block bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(18,59,112,0.04)] overflow-hidden">
         <div className="overflow-x-auto">
@@ -125,61 +207,69 @@ export function MarriageAidPage({
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
-              {marriageAids.map((aid) => (
-                <tr key={aid.id} className="hover:bg-[#F8FAFC]">
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <button
-                      type="button"
-                      onClick={() => onSelectMember(aid.memberId)}
-                      className="font-bold text-[#123B70] hover:text-[#2878C8] hover:underline cursor-pointer"
-                    >
-                      {aid.memberName}
-                    </button>
-                  </td>
-                  <td className="py-3.5 px-4 text-xs tabular-nums">{aid.nationalId}</td>
-                  <td className="py-3.5 px-4 text-xs text-[#748399] tabular-nums">
-                    {aid.birthDate}
-                  </td>
-                  <td className="py-3.5 px-4 font-bold text-[#123B70] tabular-nums whitespace-nowrap">
-                    {formatCurrency(aid.amount)}
-                  </td>
-                  <td className="py-3.5 px-4 text-xs tabular-nums">{aid.dueDate}</td>
-                  <td className="py-3.5 px-4 text-xs tabular-nums">{aid.disbursementDate}</td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <StatusIndicator
-                      label={aid.status}
-                      tone={
-                        aid.status === 'تم الصرف'
-                          ? 'success'
-                          : aid.status === 'مستحقة'
-                            ? 'info'
-                            : 'warning'
-                      }
-                    />
-                  </td>
-                  <td className="py-3.5 px-4 whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setDetailAid(aid)}
-                        title="عرض تفاصيل المساعدة"
-                        className="p-2 rounded-lg text-[#2878C8] hover:bg-[#EAF3FC] transition-colors cursor-pointer"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                      {aid.status !== 'تم الصرف' && (
-                        <button
-                          type="button"
-                          onClick={() => onDisburseAid(aid.id)}
-                          className="px-3 py-1.5 rounded-lg bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          اعتماد الصرف
-                        </button>
-                      )}
-                    </div>
+              {filteredAids.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-sm text-[#748399]">
+                    لا توجد سجلات مطابقة لمعايير البحث.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredAids.map((aid) => (
+                  <tr key={aid.id} className="hover:bg-[#F8FAFC]">
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => onSelectMember(aid.memberId)}
+                        className="font-bold text-[#123B70] hover:text-[#2878C8] hover:underline cursor-pointer"
+                      >
+                        {aid.memberName}
+                      </button>
+                    </td>
+                    <td className="py-3.5 px-4 text-xs tabular-nums">{aid.nationalId}</td>
+                    <td className="py-3.5 px-4 text-xs text-[#748399] tabular-nums">
+                      {aid.birthDate}
+                    </td>
+                    <td className="py-3.5 px-4 font-bold text-[#123B70] tabular-nums whitespace-nowrap">
+                      {formatCurrency(aid.amount)}
+                    </td>
+                    <td className="py-3.5 px-4 text-xs tabular-nums">{aid.dueDate}</td>
+                    <td className="py-3.5 px-4 text-xs tabular-nums">{aid.disbursementDate}</td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <StatusIndicator
+                        label={aid.status}
+                        tone={
+                          aid.status === 'تم الصرف'
+                            ? 'success'
+                            : aid.status === 'مستحقة'
+                              ? 'info'
+                              : 'warning'
+                        }
+                      />
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetailAid(aid)}
+                          title="عرض تفاصيل المساعدة"
+                          className="p-2 rounded-lg text-[#2878C8] hover:bg-[#EAF3FC] transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        {aid.status !== 'تم الصرف' && (
+                          <button
+                            type="button"
+                            onClick={() => onDisburseAid(aid.id)}
+                            className="h-8 px-3 rounded-lg bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            اعتماد الصرف
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -187,60 +277,73 @@ export function MarriageAidPage({
 
       {/* Mobile Cards */}
       <div className="md:hidden space-y-3">
-        {marriageAids.map((aid) => (
-          <div key={aid.id} className="bg-white rounded-xl border border-slate-200/80 p-4 space-y-2.5">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <button
-                  type="button"
-                  onClick={() => onSelectMember(aid.memberId)}
-                  className="text-sm font-bold text-[#123B70]"
-                >
-                  {aid.memberName}
-                </button>
-                <div className="text-[11px] text-[#748399] tabular-nums">{aid.nationalId}</div>
-              </div>
-              <StatusIndicator
-                label={aid.status}
-                tone={
-                  aid.status === 'تم الصرف'
-                    ? 'success'
-                    : aid.status === 'مستحقة'
-                      ? 'info'
-                      : 'warning'
-                }
-              />
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#748399]">قيمة المعونة:</span>
-              <span className="font-bold text-[#123B70] tabular-nums">
-                {formatCurrency(aid.amount)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs text-[#748399] tabular-nums">
-              <span>الاستحقاق: {aid.dueDate}</span>
-              <span>الصرف: {aid.disbursementDate}</span>
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setDetailAid(aid)}
-                className="flex-1 py-2 rounded-lg bg-slate-100 text-[#172B45] text-xs font-bold"
-              >
-                عرض التفاصيل
-              </button>
-              {aid.status !== 'تم الصرف' && (
-                <button
-                  type="button"
-                  onClick={() => onDisburseAid(aid.id)}
-                  className="flex-1 py-2 rounded-lg bg-[#EAF3FC] text-[#123B70] text-xs font-bold"
-                >
-                  اعتماد الصرف
-                </button>
-              )}
-            </div>
+        {filteredAids.length === 0 ? (
+          <div className="bg-white rounded-xl border border-slate-200/80 p-8 text-center text-sm text-[#748399]">
+            لا توجد سجلات مطابقة لمعايير البحث.
           </div>
-        ))}
+        ) : (
+          filteredAids.map((aid) => (
+            <div
+              key={aid.id}
+              className="bg-white rounded-xl border border-slate-200/80 p-4 space-y-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => onSelectMember(aid.memberId)}
+                    className="text-sm font-bold text-[#123B70] text-right truncate block"
+                  >
+                    {aid.memberName}
+                  </button>
+                  <div className="text-[11px] text-[#748399] tabular-nums">{aid.nationalId}</div>
+                </div>
+                <StatusIndicator
+                  label={aid.status}
+                  tone={
+                    aid.status === 'تم الصرف'
+                      ? 'success'
+                      : aid.status === 'مستحقة'
+                        ? 'info'
+                        : 'warning'
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs p-2.5 rounded-lg bg-[#F8FAFC]">
+                <span className="text-[#748399]">قيمة المعونة:</span>
+                <span className="font-bold text-[#123B70] tabular-nums">
+                  {formatCurrency(aid.amount)}
+                </span>
+              </div>
+              <div className="flex items-center justify-between text-xs text-[#748399] tabular-nums">
+                <span>الاستحقاق: {aid.dueDate}</span>
+                <span>الصرف: {aid.disbursementDate}</span>
+              </div>
+              <div
+                className={`grid gap-2 pt-1 ${
+                  aid.status !== 'تم الصرف' ? 'grid-cols-2' : 'grid-cols-1'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setDetailAid(aid)}
+                  className="h-9 rounded-lg bg-slate-100 text-[#172B45] text-xs font-bold cursor-pointer"
+                >
+                  عرض التفاصيل
+                </button>
+                {aid.status !== 'تم الصرف' && (
+                  <button
+                    type="button"
+                    onClick={() => onDisburseAid(aid.id)}
+                    className="h-9 rounded-lg bg-[#EAF3FC] text-[#123B70] text-xs font-bold cursor-pointer"
+                  >
+                    اعتماد الصرف
+                  </button>
+                )}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {/* View Aid Details Modal */}
@@ -306,7 +409,7 @@ export function MarriageAidPage({
               <button
                 type="button"
                 onClick={() => setDetailAid(null)}
-                className="px-5 py-2 rounded-xl bg-[#2878C8] text-white text-xs font-bold cursor-pointer"
+                className="h-10 px-5 rounded-xl bg-[#2878C8] text-white text-xs font-bold cursor-pointer"
               >
                 إغلاق
               </button>
@@ -323,6 +426,11 @@ export function MarriageAidPage({
         subtitle="أدخل بيانات المستفيد وموعد الاستحقاق والصرف"
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {formError && (
+            <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/25 text-[#DC5555] text-xs font-semibold">
+              {formError}
+            </div>
+          )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">اختيار العضو</label>
@@ -348,7 +456,10 @@ export function MarriageAidPage({
                 required
                 min={500}
                 value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                onChange={(e) => {
+                  setAmount(Number(e.target.value) || 0);
+                  setFormError('');
+                }}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm font-bold tabular-nums focus:outline-none focus:border-[#2878C8]"
               />
             </div>
@@ -407,13 +518,13 @@ export function MarriageAidPage({
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 text-sm font-semibold text-[#172B45] cursor-pointer"
+              className="h-10 px-4 rounded-xl bg-slate-100 text-sm font-semibold text-[#172B45] cursor-pointer"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#2878C8] text-sm font-semibold text-white cursor-pointer"
+              className="h-10 px-5 rounded-xl bg-[#2878C8] text-sm font-semibold text-white cursor-pointer"
             >
               حفظ المعونة
             </button>

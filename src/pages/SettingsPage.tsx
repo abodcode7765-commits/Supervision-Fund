@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Building2,
   CalendarCog,
@@ -7,16 +7,19 @@ import {
   Save,
   Layers,
   ShieldCheck,
+  AlertCircle,
+  Info,
 } from 'lucide-react';
 import { FundSettings, Group, PageId, SystemUser, YearConfig } from '../types';
 import { PageHeader } from '../components/ui/SharedUI';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getDefaultActiveYear } from '../utils/formatters';
 
 export function SettingsPage({
   settings,
   yearConfigs,
   groups,
   users,
+  currentUser,
   onSaveSettings,
   onUpdateYearConfig,
   onNavigate,
@@ -26,58 +29,99 @@ export function SettingsPage({
   yearConfigs: YearConfig[];
   groups: Group[];
   users: SystemUser[];
+  currentUser: SystemUser;
   onSaveSettings: (next: FundSettings) => void;
   onUpdateYearConfig: (cfg: YearConfig) => void;
   onNavigate: (page: PageId) => void;
-  onNotify: (msg: string) => void;
+  onNotify: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }) {
   const [form, setForm] = useState<FundSettings>(settings);
-  const [selectedYear, setSelectedYear] = useState<number>(yearConfigs[0]?.year ?? 2026);
+  const [selectedYear, setSelectedYear] = useState<number>(() =>
+    getDefaultActiveYear(yearConfigs)
+  );
 
   const activeYearCfg =
     yearConfigs.find((y) => y.year === selectedYear) ?? yearConfigs[0];
-  const [foundingFee, setFoundingFee] = useState(activeYearCfg.foundingFee);
-  const [monthlyFee, setMonthlyFee] = useState(activeYearCfg.monthlyFee);
+  const [foundingFee, setFoundingFee] = useState(activeYearCfg?.foundingFee ?? 100);
+  const [monthlyFee, setMonthlyFee] = useState(activeYearCfg?.monthlyFee ?? 100);
 
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
+  const [passError, setPassError] = useState('');
 
-  const handleYearSelect = (yr: number) => {
-    setSelectedYear(yr);
-    const found = yearConfigs.find((y) => y.year === yr);
+  useEffect(() => {
+    setForm(settings);
+  }, [settings]);
+
+  useEffect(() => {
+    const found = yearConfigs.find((y) => y.year === selectedYear) ?? yearConfigs[0];
     if (found) {
       setFoundingFee(found.foundingFee);
       setMonthlyFee(found.monthlyFee);
     }
+  }, [selectedYear, yearConfigs]);
+
+  const handleYearSelect = (yr: number) => {
+    setSelectedYear(yr);
   };
 
   const handleGeneralSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSaveSettings(form);
+    if (!form.fundName.trim() || !form.subName.trim() || !form.currency.trim()) {
+      onNotify('يرجى تعبئة اسم الصندوق والاسم الفرعي والعملة.', 'warning');
+      return;
+    }
+    onSaveSettings({
+      ...form,
+      fundName: form.fundName.trim(),
+      subName: form.subName.trim(),
+      currency: form.currency.trim(),
+      city: form.city.trim(),
+    });
   };
 
   const handleFeesSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (
+      !Number.isFinite(foundingFee) ||
+      !Number.isFinite(monthlyFee) ||
+      foundingFee < 0 ||
+      monthlyFee <= 0
+    ) {
+      onNotify('يرجى إدخال قيم صحيحة للرسوم.', 'warning');
+      return;
+    }
     onUpdateYearConfig({
       year: selectedYear,
       foundingFee,
       monthlyFee,
-      monthsCount: 12,
+      monthsCount: activeYearCfg?.monthsCount ?? 12,
     });
   };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPass || !newPass) return;
+    setPassError('');
+    if (!currentPass.trim()) {
+      setPassError('يرجى إدخال كلمة المرور الحالية.');
+      return;
+    }
+    if (newPass.trim().length < 6) {
+      setPassError('يجب أن تكون كلمة المرور الجديدة 6 خانات على الأقل.');
+      return;
+    }
     if (newPass !== confirmPass) {
-      onNotify('كلمة المرور الجديدة وتأكيدها غير متطابقين.');
+      setPassError('كلمة المرور الجديدة وتأكيدها غير متطابقين.');
       return;
     }
     setCurrentPass('');
     setNewPass('');
     setConfirmPass('');
-    onNotify('تم تحديث كلمة المرور بنجاح.');
+    onNotify(
+      'تم التحقق وتحديث كلمة المرور في وضع المعاينة التجريبي (يتطلب الربط الفعلي مسار /api/auth/change-password في الخادم).',
+      'info'
+    );
   };
 
   return (
@@ -91,10 +135,10 @@ export function SettingsPage({
         {/* 1. Fund Info */}
         <form
           onSubmit={handleGeneralSubmit}
-          className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4"
+          className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4"
         >
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-            <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center shrink-0">
               <Building2 className="w-5 h-5" />
             </div>
             <div>
@@ -108,6 +152,7 @@ export function SettingsPage({
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">اسم الصندوق</label>
               <input
                 type="text"
+                required
                 value={form.fundName}
                 onChange={(e) => setForm({ ...form, fundName: e.target.value })}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
@@ -117,6 +162,7 @@ export function SettingsPage({
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">الاسم الفرعي</label>
               <input
                 type="text"
+                required
                 value={form.subName}
                 onChange={(e) => setForm({ ...form, subName: e.target.value })}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
@@ -126,6 +172,7 @@ export function SettingsPage({
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">العملة المعتمدة</label>
               <input
                 type="text"
+                required
                 value={form.currency}
                 onChange={(e) => setForm({ ...form, currency: e.target.value })}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
@@ -145,7 +192,7 @@ export function SettingsPage({
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>حفظ معلومات الصندوق</span>
@@ -156,17 +203,17 @@ export function SettingsPage({
         {/* 2. Financial Year & Fees Settings */}
         <form
           onSubmit={handleFeesSubmit}
-          className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4"
+          className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4"
         >
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-            <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center shrink-0">
               <CalendarCog className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-[#172B45]">
                 إعدادات السنة المالية والرسوم
               </h3>
-              <p className="text-xs text-[#748399]">تحديد رسوم التأسيس السنوية والاشتراك الشهري</p>
+              <p className="text-xs text-[#748399]">تعديل رسوم سنة محددة دون التأثير على غيرها</p>
             </div>
           </div>
 
@@ -192,8 +239,9 @@ export function SettingsPage({
               </label>
               <input
                 type="number"
+                min={0}
                 value={foundingFee}
-                onChange={(e) => setFoundingFee(Number(e.target.value))}
+                onChange={(e) => setFoundingFee(Number(e.target.value) || 0)}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm font-bold tabular-nums focus:outline-none focus:border-[#2878C8]"
               />
             </div>
@@ -203,24 +251,31 @@ export function SettingsPage({
               </label>
               <input
                 type="number"
+                min={1}
                 value={monthlyFee}
-                onChange={(e) => setMonthlyFee(Number(e.target.value))}
+                onChange={(e) => setMonthlyFee(Number(e.target.value) || 0)}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm font-bold tabular-nums focus:outline-none focus:border-[#2878C8]"
               />
             </div>
           </div>
 
           <div className="p-3 rounded-xl bg-[#F8FAFC] border border-slate-200/70 flex items-center justify-between text-xs">
-            <span className="text-[#748399]">إجمالي الاشتراك السنوي للعضو في {selectedYear}:</span>
+            <span className="text-[#748399]">
+              إجمالي الاشتراك السنوي للعضو في {selectedYear} (12 شهراً):
+            </span>
             <strong className="text-[#123B70] tabular-nums">
-              {formatCurrency(foundingFee + monthlyFee * 12)}
+              {formatCurrency(
+                (Number.isFinite(foundingFee) ? foundingFee : 0) +
+                  (Number.isFinite(monthlyFee) ? monthlyFee : 0) *
+                    (activeYearCfg?.monthsCount ?? 12)
+              )}
             </strong>
           </div>
 
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
             >
               <Save className="w-4 h-4" />
               <span>تحديث رسوم السنة</span>
@@ -231,18 +286,28 @@ export function SettingsPage({
         {/* 3. Account & Password Settings */}
         <form
           onSubmit={handlePasswordSubmit}
-          className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4"
+          className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4"
         >
           <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-            <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center shrink-0">
               <Lock className="w-5 h-5" />
             </div>
             <div>
               <h3 className="text-base font-bold text-[#172B45]">
                 الحساب الشخصي وكلمة المرور
               </h3>
-              <p className="text-xs text-[#748399]">تحديث بيانات الدخول الخاصة بحساب مدير النظام</p>
+              <p className="text-xs text-[#748399]">
+                الحساب الحالي: {currentUser.name} ({currentUser.role})
+              </p>
             </div>
+          </div>
+
+          <div className="p-3 rounded-xl bg-[#EAF3FC]/70 border border-[#4A90D9]/30 text-[11px] text-[#123B70] flex items-start gap-2">
+            <Info className="w-4 h-4 text-[#2878C8] shrink-0 mt-0.5" />
+            <span>
+              في بيئة المعاينة الحالية يتم التحقق من تطابق الحقول محلياً فقط؛ وعند ربط الخادم
+              يتصل النموذج مباشرة بمسار <code className="font-mono">POST /api/auth/change-password</code>.
+            </span>
           </div>
 
           <div className="space-y-3">
@@ -253,7 +318,10 @@ export function SettingsPage({
               <input
                 type="password"
                 value={currentPass}
-                onChange={(e) => setCurrentPass(e.target.value)}
+                onChange={(e) => {
+                  setCurrentPass(e.target.value);
+                  setPassError('');
+                }}
                 placeholder="••••••••"
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
               />
@@ -266,8 +334,11 @@ export function SettingsPage({
                 <input
                   type="password"
                   value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)}
-                  placeholder="••••••••"
+                  onChange={(e) => {
+                    setNewPass(e.target.value);
+                    setPassError('');
+                  }}
+                  placeholder="6 خانات فأكثر"
                   className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
                 />
               </div>
@@ -278,7 +349,10 @@ export function SettingsPage({
                 <input
                   type="password"
                   value={confirmPass}
-                  onChange={(e) => setConfirmPass(e.target.value)}
+                  onChange={(e) => {
+                    setConfirmPass(e.target.value);
+                    setPassError('');
+                  }}
                   placeholder="••••••••"
                   className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
                 />
@@ -286,10 +360,17 @@ export function SettingsPage({
             </div>
           </div>
 
+          {passError && (
+            <div className="p-2.5 rounded-xl bg-[#DC5555]/10 text-[#DC5555] text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{passError}</span>
+            </div>
+          )}
+
           <div className="pt-2 flex justify-end">
             <button
               type="submit"
-              className="px-4 py-2.5 rounded-xl bg-[#123B70] hover:bg-[#0e2e58] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+              className="h-10 px-4 rounded-xl bg-[#123B70] hover:bg-[#0e2e58] text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
             >
               تغيير كلمة المرور
             </button>
@@ -298,9 +379,9 @@ export function SettingsPage({
 
         {/* 4. Notifications, General UI & Management Links */}
         <div className="space-y-5">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4">
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)] space-y-4">
             <div className="flex items-center gap-2.5 pb-3 border-b border-slate-100">
-              <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center">
+              <div className="w-9 h-9 rounded-xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center shrink-0">
                 <Bell className="w-5 h-5" />
               </div>
               <div>
@@ -353,7 +434,7 @@ export function SettingsPage({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 flex items-center justify-between gap-3">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 flex items-center justify-between gap-3 h-full">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-[#EAF3FC] text-[#123B70] flex items-center justify-center shrink-0">
                   <Layers className="w-5 h-5" />
@@ -368,13 +449,13 @@ export function SettingsPage({
               <button
                 type="button"
                 onClick={() => onNavigate('groups')}
-                className="px-3 py-2 rounded-xl bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-xs font-bold transition-colors shrink-0 cursor-pointer"
+                className="h-9 px-3.5 rounded-xl bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-xs font-bold transition-colors shrink-0 cursor-pointer"
               >
                 فتح
               </button>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 flex items-center justify-between gap-3">
+            <div className="bg-white rounded-2xl border border-slate-200/80 p-4 flex items-center justify-between gap-3 h-full">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-[#EAF3FC] text-[#123B70] flex items-center justify-center shrink-0">
                   <ShieldCheck className="w-5 h-5" />
@@ -389,7 +470,7 @@ export function SettingsPage({
               <button
                 type="button"
                 onClick={() => onNavigate('users')}
-                className="px-3 py-2 rounded-xl bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-xs font-bold transition-colors shrink-0 cursor-pointer"
+                className="h-9 px-3.5 rounded-xl bg-[#EAF3FC] hover:bg-[#2878C8] text-[#123B70] hover:text-white text-xs font-bold transition-colors shrink-0 cursor-pointer"
               >
                 فتح
               </button>

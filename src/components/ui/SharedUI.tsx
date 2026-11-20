@@ -110,20 +110,20 @@ export function StatCard({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-[0_1px_3px_rgba(18,59,112,0.04)] hover:border-[#4A90D9]/50 transition-colors duration-150">
+    <div className="h-full bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 shadow-[0_1px_3px_rgba(18,59,112,0.04)] hover:border-[#4A90D9]/50 transition-colors duration-150 flex flex-col justify-between">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="text-xs sm:text-sm font-medium text-[#748399] truncate">{title}</p>
           <p
-            className={`mt-2 text-2xl font-bold tracking-tight tabular-nums ${valueColorMap[accent]}`}
+            className={`mt-2 text-xl sm:text-2xl font-bold tracking-tight tabular-nums break-words ${valueColorMap[accent]}`}
           >
             {value}
           </p>
           {subtitle && (
-            <p className="mt-1.5 text-xs text-[#748399] truncate">{subtitle}</p>
+            <p className="mt-1.5 text-xs text-[#748399] line-clamp-2">{subtitle}</p>
           )}
         </div>
-        <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${accentMap[accent]}`}>
+        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 ${accentMap[accent]}`}>
           <Icon className="w-5 h-5" />
         </div>
       </div>
@@ -141,12 +141,16 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-[#172B45] leading-snug">{title}</h1>
-        <p className="mt-1 text-sm text-[#748399]">{description}</p>
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
+      <div className="min-w-0">
+        <h1 className="text-lg sm:text-2xl font-bold text-[#172B45] leading-snug">{title}</h1>
+        <p className="mt-1 text-xs sm:text-sm text-[#748399] leading-relaxed">{description}</p>
       </div>
-      {action && <div className="shrink-0 flex flex-wrap items-center gap-2.5">{action}</div>}
+      {action && (
+        <div className="w-full sm:w-auto shrink-0 flex flex-wrap items-center gap-2 sm:gap-2.5">
+          {action}
+        </div>
+      )}
     </div>
   );
 }
@@ -182,30 +186,30 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#123B70]/45 backdrop-blur-[2px]"
+      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#123B70]/45 backdrop-blur-[2px]"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
     >
       <div
-        className={`w-full ${maxW} max-h-[90vh] flex flex-col bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden`}
+        className={`w-full ${maxW} max-h-[92vh] flex flex-col bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-slate-100 bg-[#F8FAFC]">
-          <div>
-            <h2 className="text-lg font-bold text-[#172B45]">{title}</h2>
-            {subtitle && <p className="text-xs text-[#748399] mt-0.5">{subtitle}</p>}
+        <div className="flex items-start justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 bg-[#F8FAFC]">
+          <div className="min-w-0">
+            <h2 className="text-base sm:text-lg font-bold text-[#172B45]">{title}</h2>
+            {subtitle && <p className="text-xs text-[#748399] mt-0.5 leading-relaxed">{subtitle}</p>}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-2 rounded-lg text-[#748399] hover:text-[#172B45] hover:bg-slate-200/60 transition-colors"
+            className="p-2 rounded-lg text-[#748399] hover:text-[#172B45] hover:bg-slate-200/60 transition-colors shrink-0"
             aria-label="إغلاق"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto">{children}</div>
+        <div className="p-4 sm:p-6 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
@@ -217,7 +221,8 @@ export function ConfirmModal({
   onConfirm,
   title,
   message,
-  confirmLabel = 'تأكيد الحذف',
+  confirmLabel = 'تأكيد',
+  variant = 'danger',
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -225,20 +230,35 @@ export function ConfirmModal({
   title: string;
   message: string;
   confirmLabel?: string;
+  variant?: 'danger' | 'warning' | 'primary';
 }) {
+  const iconTone =
+    variant === 'warning'
+      ? 'bg-[#E99A35]/15 text-[#C67B1B]'
+      : variant === 'primary'
+        ? 'bg-[#EAF3FC] text-[#2878C8]'
+        : 'bg-[#DC5555]/10 text-[#DC5555]';
+
+  const btnTone =
+    variant === 'warning'
+      ? 'bg-[#C67B1B] hover:bg-[#a86613]'
+      : variant === 'primary'
+        ? 'bg-[#2878C8] hover:bg-[#123B70]'
+        : 'bg-[#DC5555] hover:bg-[#c54646]';
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
       <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[#DC5555]/10 text-[#DC5555] flex items-center justify-center shrink-0">
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconTone}`}>
           <AlertTriangle className="w-5 h-5" />
         </div>
         <p className="text-sm text-[#172B45] leading-relaxed">{message}</p>
       </div>
-      <div className="mt-6 flex items-center justify-end gap-3">
+      <div className="mt-6 flex items-center justify-end gap-2.5">
         <button
           type="button"
           onClick={onClose}
-          className="px-4 py-2.5 text-sm font-medium text-[#172B45] bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+          className="h-10 px-4 text-sm font-medium text-[#172B45] bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
         >
           إلغاء
         </button>
@@ -248,7 +268,7 @@ export function ConfirmModal({
             onConfirm();
             onClose();
           }}
-          className="px-4 py-2.5 text-sm font-semibold text-white bg-[#DC5555] hover:bg-[#c54646] rounded-lg transition-colors"
+          className={`h-10 px-4 text-sm font-semibold text-white rounded-xl transition-colors cursor-pointer ${btnTone}`}
         >
           {confirmLabel}
         </button>
@@ -269,12 +289,12 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 py-14 px-6 text-center">
+    <div className="bg-white rounded-xl border border-slate-200/80 py-12 px-5 text-center">
       <div className="w-14 h-14 mx-auto rounded-2xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center">
         <Icon className="w-7 h-7" />
       </div>
       <h3 className="mt-4 text-base font-bold text-[#172B45]">{title}</h3>
-      <p className="mt-1.5 text-sm text-[#748399] max-w-md mx-auto">{description}</p>
+      <p className="mt-1.5 text-sm text-[#748399] max-w-md mx-auto leading-relaxed">{description}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
   );
@@ -299,14 +319,14 @@ export function ToastBanner({
       <div
         className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-white shadow-lg border-r-4 ${colors}`}
       >
-        <div className="flex items-center gap-2.5 text-sm font-medium">
+        <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium">
           <CheckCircle2 className="w-4 h-4 text-[#4ADE80] shrink-0" />
           <span>{toast.message}</span>
         </div>
         <button
           type="button"
           onClick={onDismiss}
-          className="text-white/70 hover:text-white p-1"
+          className="text-white/70 hover:text-white p-1 shrink-0"
           aria-label="إغلاق الإشعار"
         >
           <X className="w-4 h-4" />

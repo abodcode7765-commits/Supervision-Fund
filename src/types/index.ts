@@ -14,6 +14,7 @@ export type PageId =
 
 export type SubscriptionStatus = 'مسدد' | 'متأخر' | 'مسدد جزئياً';
 export type MonthCellStatus = 'paid' | 'overdue' | 'partial' | 'upcoming';
+export type MemberStatus = 'نشط' | 'موقوف';
 
 export interface Member {
   id: string;
@@ -24,19 +25,20 @@ export interface Member {
   groupId: string;
   groupName: string;
   joinDate: string;
-  memberStatus: 'نشط' | 'موقوف';
+  memberStatus: MemberStatus;
   subscriptionStatus: SubscriptionStatus;
-  phone: string;
+  phone?: string;
 }
 
 export interface Group {
   id: string;
   name: string;
   leaderId: string;
+  leaderUserId?: string;
   leaderName: string;
   description: string;
   createdAt: string;
-  baseMemberCount: number;
+  baseMemberCount?: number;
 }
 
 export interface YearConfig {
@@ -51,7 +53,8 @@ export interface MemberYearSubscription {
   year: number;
   foundingStatus: 'paid' | 'overdue' | 'partial';
   foundingPaidAmount: number;
-  months: MonthCellStatus[]; // 12 items: Jan -> Dec
+  months: MonthCellStatus[]; // 12 items
+  monthPaidAmounts?: number[]; // Exact SAR paid per month (0..monthlyFee)
 }
 
 export type PaymentMethod = 'تحويل بنكي' | 'نقدي' | 'شيك';
@@ -62,9 +65,12 @@ export interface PaymentRecord {
   memberId: string;
   memberName: string;
   nationalId: string;
+  groupId?: string;
   groupName: string;
   year: number;
   monthsLabel: string;
+  allocatedToFounding?: number;
+  allocatedMonthIndices?: number[];
   dueAmount: number;
   amount: number;
   remainingAmount: number;
@@ -84,6 +90,8 @@ export interface QittaParticipant {
   status: QittaParticipantStatus;
 }
 
+export type QittaStatus = 'مكتملة' | 'قيد التحصيل' | 'جديدة';
+
 export interface Qitta {
   id: string;
   name: string;
@@ -91,7 +99,8 @@ export interface Qitta {
   description: string;
   createdAt: string;
   totalAmount: number;
-  status: 'مكتملة' | 'قيد التحصيل' | 'جديدة';
+  distributionMode?: 'equal' | 'custom';
+  status: QittaStatus;
   participants: QittaParticipant[];
 }
 
@@ -120,6 +129,7 @@ export type ExpenseCategory =
 export interface Expense {
   id: string;
   operationNumber: string;
+  year: number;
   title: string;
   reason: string;
   category: ExpenseCategory;
@@ -155,4 +165,28 @@ export interface FundSettings {
   notifyOnMarriageAid: boolean;
   monthlyReminderDay: number;
   compactTables: boolean;
+}
+
+export type ReportType =
+  | 'comprehensive'
+  | 'members'
+  | 'member-statement'
+  | 'groups'
+  | 'annual-subs'
+  | 'monthly-subs'
+  | 'payments'
+  | 'overdue'
+  | 'expenses'
+  | 'qittat'
+  | 'marriage-aid';
+
+export interface ReportFilterDTO {
+  reportType: ReportType;
+  year: number | 'all';
+  groupId: string | 'all';
+  memberId: string | 'all';
+  fromDate: string;
+  toDate: string;
+  statusFilter: string | 'all';
+  operationType: 'all' | 'payments' | 'expenses' | 'qittat' | 'marriage-aid';
 }

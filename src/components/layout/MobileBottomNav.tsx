@@ -43,22 +43,26 @@ export function MobileBottomNav({
             key={item.id}
             type="button"
             onClick={() => onNavigate(item.id)}
-            className={`flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-lg min-w-[56px] ${
+            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 rounded-lg ${
               active ? 'text-[#2878C8]' : 'text-[#748399]'
             }`}
           >
-            <Icon className="w-5 h-5" />
-            <span className="text-[10px] font-semibold whitespace-nowrap">{item.label}</span>
+            <Icon className="w-5 h-5 shrink-0" />
+            <span className="text-[10px] font-semibold whitespace-nowrap truncate max-w-full">
+              {item.label}
+            </span>
           </button>
         );
       })}
       <button
         type="button"
         onClick={onOpenMenu}
-        className="flex flex-col items-center justify-center gap-0.5 px-2.5 py-1 rounded-lg min-w-[56px] text-[#748399]"
+        className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 rounded-lg text-[#748399]"
       >
-        <Menu className="w-5 h-5" />
-        <span className="text-[10px] font-semibold whitespace-nowrap">القائمة</span>
+        <Menu className="w-5 h-5 shrink-0" />
+        <span className="text-[10px] font-semibold whitespace-nowrap truncate max-w-full">
+          القائمة
+        </span>
       </button>
     </nav>
   );

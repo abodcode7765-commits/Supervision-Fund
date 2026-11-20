@@ -4,21 +4,23 @@ import {
   Plus,
   Eye,
   Pencil,
-  Trash2,
+  Archive,
+  RotateCcw,
   ArrowRight,
   Users,
-  Phone,
   CreditCard,
   Calendar,
   Layers,
   CheckCircle2,
   AlertCircle,
   ShieldAlert,
+  Sparkles,
 } from 'lucide-react';
 import {
   Group,
   MarriageAid,
   Member,
+  MemberStatus,
   MemberYearSubscription,
   PaymentRecord,
   Qitta,
@@ -34,7 +36,15 @@ import {
   StatCard,
   StatusIndicator,
 } from '../components/ui/SharedUI';
-import { computeMemberYearTotals, formatCurrency } from '../utils/formatters';
+import {
+  addCurrency,
+  computeMemberYearTotals,
+  formatCurrency,
+  getTodayIsoDate,
+  isFutureScheduledYear,
+  isSubscriptionRowOverdue,
+  toHalalas,
+} from '../utils/formatters';
 import { ARABIC_MONTHS } from '../data/mockData';
 
 function getStatusTone(status: SubscriptionStatus) {
@@ -56,7 +66,7 @@ export function MembersPage({
   onSelectMember,
   onAddMember,
   onUpdateMember,
-  onDeleteMember,
+  onToggleArchiveMember,
 }: {
   members: Member[];
   groups: Group[];
@@ -73,10 +83,9 @@ export function MembersPage({
     nationalId: string;
     birthDate: string;
     groupId: string;
-    phone: string;
-  }) => void;
-  onUpdateMember: (member: Member) => void;
-  onDeleteMember: (id: string) => void;
+  }) => { ok: boolean; error?: string };
+  onUpdateMember: (member: Member) => { ok: boolean; error?: string };
+  onToggleArchiveMember: (id: string) => void;
 }) {
   const isGroupLeader = currentUser.role === 'رئيس المجموعة';
   const canEdit = currentUser.role === 'مدير الصندوق';
@@ -89,17 +98,18 @@ export function MembersPage({
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortMode, setSortMode] = useState<'serial' | 'recent'>('recent');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Member | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<Member | null>(null);
 
   const [formName, setFormName] = useState('');
   const [formNationalId, setFormNationalId] = useState('');
   const [formBirthDate, setFormBirthDate] = useState('');
   const [formGroupId, setFormGroupId] = useState(groups[0]?.id ?? '');
-  const [formPhone, setFormPhone] = useState('');
-  const [formStatus, setFormStatus] = useState<SubscriptionStatus>('مسدد');
+  const [formMemberStatus, setFormMemberStatus] = useState<MemberStatus>('نشط');
+  const [formError, setFormError] = useState('');
 
   const openAddModal = () => {
     setEditingMember(null);
@@ -107,8 +117,8 @@ export function MembersPage({
     setFormNationalId('');
     setFormBirthDate('1995-01-01');
     setFormGroupId(groups[0]?.id ?? '');
-    setFormPhone('0500000000');
-    setFormStatus('مسدد');
+    setFormMemberStatus('نشط');
+    setFormError('');
     setModalOpen(true);
   };
 
@@ -118,34 +128,63 @@ export function MembersPage({
     setFormNationalId(m.nationalId);
     setFormBirthDate(m.birthDate);
     setFormGroupId(m.groupId);
-    setFormPhone(m.phone);
-    setFormStatus(m.subscriptionStatus);
+    setFormMemberStatus(m.memberStatus);
+    setFormError('');
     setModalOpen(true);
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim() || !formNationalId.trim()) return;
+    const cleanName = formName.trim();
+    const cleanNationalId = formNationalId.trim();
+
+    if (!cleanName) {
+      setFormError('يرجى إدخال الاسم الكامل للعضو.');
+      return;
+    }
+    if (!cleanNationalId) {
+      setFormError('يرجى إدخال رقم الهوية.');
+      return;
+    }
+    if (!formBirthDate) {
+      setFormError('يرجى تحديد تاريخ الميلاد.');
+      return;
+    }
+    if (formBirthDate > getTodayIsoDate()) {
+      setFormError('تاريخ الميلاد لا يمكن أن يكون في المستقبل.');
+      return;
+    }
+    if (!formGroupId) {
+      setFormError('يرجى اختيار المجموعة.');
+      return;
+    }
+
     const grp = groups.find((g) => g.id === formGroupId);
     if (editingMember) {
-      onUpdateMember({
+      const res = onUpdateMember({
         ...editingMember,
-        name: formName.trim(),
-        nationalId: formNationalId.trim(),
+        name: cleanName,
+        nationalId: cleanNationalId,
         birthDate: formBirthDate,
         groupId: formGroupId,
         groupName: grp?.name ?? editingMember.groupName,
-        phone: formPhone.trim(),
-        subscriptionStatus: formStatus,
+        memberStatus: formMemberStatus,
       });
+      if (!res.ok) {
+        setFormError(res.error ?? 'تعذر حفظ التعديلات.');
+        return;
+      }
     } else {
-      onAddMember({
-        name: formName.trim(),
-        nationalId: formNationalId.trim(),
+      const res = onAddMember({
+        name: cleanName,
+        nationalId: cleanNationalId,
         birthDate: formBirthDate,
         groupId: formGroupId,
-        phone: formPhone.trim(),
       });
+      if (!res.ok) {
+        setFormError(res.error ?? 'تعذر إضافة العضو.');
+        return;
+      }
     }
     setModalOpen(false);
   };
@@ -170,14 +209,39 @@ export function MembersPage({
     );
   }
 
-  const filtered = scopedMembers.filter((m) => {
-    const q = search.trim();
-    const matchesSearch =
-      !q || m.name.includes(q) || m.nationalId.includes(q) || m.groupName.includes(q);
-    const matchesGroup = groupFilter === 'all' || m.groupId === groupFilter;
-    const matchesStatus = statusFilter === 'all' || m.subscriptionStatus === statusFilter;
-    return matchesSearch && matchesGroup && matchesStatus;
-  });
+  const filtered = scopedMembers
+    .filter((m) => {
+      const q = search.trim();
+      const matchesSearch =
+        !q || m.name.includes(q) || m.nationalId.includes(q) || m.groupName.includes(q);
+      const matchesGroup = groupFilter === 'all' || m.groupId === groupFilter;
+      const matchesStatus =
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'موقوف'
+            ? m.memberStatus === 'موقوف'
+            : statusFilter === 'نشط'
+              ? m.memberStatus === 'نشط'
+              : m.subscriptionStatus === statusFilter;
+      return matchesSearch && matchesGroup && matchesStatus;
+    })
+    .sort((a, b) => {
+      if (sortMode === 'recent') {
+        const cmp = b.joinDate.localeCompare(a.joinDate);
+        return cmp !== 0 ? cmp : b.serial - a.serial;
+      }
+      return a.serial - b.serial;
+    });
+
+  const recentIds = new Set(
+    [...scopedMembers]
+      .sort((a, b) => {
+        const cmp = b.joinDate.localeCompare(a.joinDate);
+        return cmp !== 0 ? cmp : b.serial - a.serial;
+      })
+      .slice(0, 3)
+      .map((m) => m.id)
+  );
 
   return (
     <div className="space-y-5">
@@ -193,7 +257,7 @@ export function MembersPage({
             <button
               type="button"
               onClick={openAddModal}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
+              className="w-full sm:w-auto h-10 inline-flex items-center justify-center gap-2 px-4 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white text-sm font-semibold transition-colors cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               <span>إضافة عضو جديد</span>
@@ -214,8 +278,8 @@ export function MembersPage({
 
       {/* Filter & Search Bar */}
       <div className="bg-white rounded-xl border border-slate-200/80 p-4 shadow-[0_1px_3px_rgba(18,59,112,0.04)]">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-          <div className={`${isGroupLeader ? 'md:col-span-8' : 'md:col-span-6'} relative`}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+          <div className={`${isGroupLeader ? 'lg:col-span-6' : 'lg:col-span-4'} relative`}>
             <Search className="w-4 h-4 text-[#748399] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -227,7 +291,7 @@ export function MembersPage({
           </div>
 
           {!isGroupLeader && (
-            <div className="md:col-span-3">
+            <div className="lg:col-span-3">
               <select
                 value={groupFilter}
                 onChange={(e) => setGroupFilter(e.target.value)}
@@ -243,16 +307,30 @@ export function MembersPage({
             </div>
           )}
 
-          <div className={isGroupLeader ? 'md:col-span-4' : 'md:col-span-3'}>
+          <div className={isGroupLeader ? 'lg:col-span-3' : 'lg:col-span-3'}>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
               className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm text-[#172B45] focus:bg-white focus:outline-none focus:border-[#2878C8]"
             >
-              <option value="all">جميع حالات الاشتراك</option>
+              <option value="all">جميع الحالات</option>
               <option value="مسدد">مسدد</option>
-              <option value="متأخر">متأخر</option>
               <option value="مسدد جزئياً">مسدد جزئياً</option>
+              <option value="متأخر">متأخر</option>
+              <option value="نشط">الأعضاء النشطون</option>
+              <option value="موقوف">الأعضاء المؤرشفون/الموقوفون</option>
+            </select>
+          </div>
+
+          <div className={isGroupLeader ? 'lg:col-span-3' : 'lg:col-span-2'}>
+            <select
+              value={sortMode}
+              onChange={(e) => setSortMode(e.target.value as 'serial' | 'recent')}
+              className="w-full h-11 px-3.5 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm text-[#172B45] focus:bg-white focus:outline-none focus:border-[#2878C8]"
+              aria-label="ترتيب الأعضاء"
+            >
+              <option value="recent">الأحدث إضافة</option>
+              <option value="serial">الترتيب التسلسلي</option>
             </select>
           </div>
         </div>
@@ -271,7 +349,7 @@ export function MembersPage({
                 setGroupFilter('all');
                 setStatusFilter('all');
               }}
-              className="px-4 py-2 rounded-xl bg-[#EAF3FC] text-[#2878C8] text-sm font-semibold hover:bg-[#d8ebfc] transition-colors cursor-pointer"
+              className="h-10 px-4 rounded-xl bg-[#EAF3FC] text-[#2878C8] text-sm font-semibold hover:bg-[#d8ebfc] transition-colors cursor-pointer"
             >
               إعادة تعيين الفلاتر
             </button>
@@ -285,30 +363,48 @@ export function MembersPage({
               <table className="w-full text-right border-collapse">
                 <thead>
                   <tr className="bg-[#F8FAFC] border-b border-slate-200/80 text-xs font-bold text-[#748399]">
-                    <th className="py-3.5 px-4">م</th>
+                    <th className="py-3.5 px-4">الرقم</th>
                     <th className="py-3.5 px-4">اسم العضو</th>
                     <th className="py-3.5 px-4">رقم الهوية</th>
                     <th className="py-3.5 px-4">تاريخ الميلاد</th>
                     <th className="py-3.5 px-4">المجموعة</th>
-                    <th className="py-3.5 px-4">تاريخ الانضمام</th>
+                    <th className="py-3.5 px-4">تاريخ الإضافة</th>
                     <th className="py-3.5 px-4">حالة الاشتراك</th>
                     <th className="py-3.5 px-4 text-center">الإجراءات</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
-                  {filtered.map((member, index) => (
-                    <tr key={member.id} className="hover:bg-[#F8FAFC] transition-colors">
+                  {filtered.map((member) => (
+                    <tr
+                      key={member.id}
+                      className={`hover:bg-[#F8FAFC] transition-colors ${
+                        member.memberStatus === 'موقوف' ? 'bg-slate-50/70 opacity-80' : ''
+                      }`}
+                    >
                       <td className="py-3.5 px-4 text-xs font-semibold text-[#748399] tabular-nums">
-                        {index + 1}
+                        #{member.serial}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => onSelectMember(member.id)}
-                          className="font-bold text-[#123B70] hover:text-[#2878C8] hover:underline cursor-pointer"
-                        >
-                          {member.name}
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onSelectMember(member.id)}
+                            className="font-bold text-[#123B70] hover:text-[#2878C8] hover:underline cursor-pointer"
+                          >
+                            {member.name}
+                          </button>
+                          {recentIds.has(member.id) && sortMode === 'recent' && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#EAF3FC] text-[#2878C8] text-[10px] font-bold">
+                              <Sparkles className="w-2.5 h-2.5" />
+                              حديث
+                            </span>
+                          )}
+                          {member.memberStatus === 'موقوف' && (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-200 text-[#748399] text-[10px] font-bold">
+                              موقوف
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 text-xs text-[#172B45] tabular-nums whitespace-nowrap">
                         {member.nationalId}
@@ -350,11 +446,23 @@ export function MembersPage({
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDeleteTarget(member)}
-                                title="حذف العضو"
-                                className="p-2 rounded-lg text-[#DC5555] hover:bg-[#DC5555]/10 transition-colors cursor-pointer"
+                                onClick={() => setArchiveTarget(member)}
+                                title={
+                                  member.memberStatus === 'نشط'
+                                    ? 'أرشفة / إيقاف العضو مع حفظ السجل المالي'
+                                    : 'إعادة تفعيل العضو'
+                                }
+                                className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                                  member.memberStatus === 'نشط'
+                                    ? 'text-[#C67B1B] hover:bg-[#E99A35]/15'
+                                    : 'text-[#16A36A] hover:bg-[#16A36A]/10'
+                                }`}
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {member.memberStatus === 'نشط' ? (
+                                  <Archive className="w-4 h-4" />
+                                ) : (
+                                  <RotateCcw className="w-4 h-4" />
+                                )}
                               </button>
                             </>
                           )}
@@ -367,61 +475,97 @@ export function MembersPage({
             </div>
           </div>
 
-          {/* Mobile Responsive Cards */}
+          {/* Mobile Responsive Cards (Uniform heights & consistent action buttons) */}
           <div className="md:hidden space-y-3">
             {filtered.map((member) => (
               <div
                 key={member.id}
-                className="bg-white rounded-xl border border-slate-200/80 p-4 space-y-3"
+                className={`bg-white rounded-xl border border-slate-200/80 p-4 space-y-3 ${
+                  member.memberStatus === 'موقوف' ? 'bg-slate-50 opacity-85' : ''
+                }`}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onSelectMember(member.id)}
-                    className="text-base font-bold text-[#123B70] text-right"
-                  >
-                    {member.name}
-                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[11px] font-bold text-[#748399] tabular-nums">
+                        #{member.serial}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onSelectMember(member.id)}
+                        className="text-sm font-bold text-[#123B70] text-right truncate"
+                      >
+                        {member.name}
+                      </button>
+                      {member.memberStatus === 'موقوف' && (
+                        <span className="px-1.5 py-0.5 rounded bg-slate-200 text-[#748399] text-[10px] font-bold">
+                          موقوف
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-[#748399] mt-0.5 truncate">
+                      {member.groupName}
+                    </div>
+                  </div>
                   <StatusIndicator
                     label={member.subscriptionStatus}
                     tone={getStatusTone(member.subscriptionStatus)}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-xs text-[#748399]">
-                  <div>
-                    الهوية: <span className="text-[#172B45] tabular-nums">{member.nationalId}</span>
+
+                <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-[#F8FAFC] text-xs text-[#748399]">
+                  <div className="truncate">
+                    الهوية: <span className="text-[#172B45] font-medium tabular-nums">{member.nationalId}</span>
                   </div>
-                  <div>
-                    الميلاد: <span className="text-[#172B45] tabular-nums">{member.birthDate}</span>
+                  <div className="truncate">
+                    الميلاد: <span className="text-[#172B45] font-medium tabular-nums">{member.birthDate}</span>
                   </div>
-                  <div className="col-span-2">
-                    المجموعة: <span className="text-[#172B45] font-medium">{member.groupName}</span>
+                  <div className="col-span-2 truncate">
+                    تاريخ الإضافة: <span className="text-[#172B45] font-medium tabular-nums">{member.joinDate}</span>
                   </div>
                 </div>
-                <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+
+                <div className="pt-2 border-t border-slate-100 grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => onSelectMember(member.id)}
-                    className="flex-1 py-2 rounded-lg bg-[#EAF3FC] text-[#2878C8] text-xs font-bold flex items-center justify-center gap-1.5"
+                    className={`h-9 rounded-lg bg-[#EAF3FC] text-[#2878C8] text-xs font-bold flex items-center justify-center gap-1 ${
+                      canEdit ? 'col-span-1' : 'col-span-3'
+                    }`}
                   >
                     <Eye className="w-3.5 h-3.5" />
-                    <span>عرض الملف</span>
+                    <span>الملف</span>
                   </button>
                   {canEdit && (
                     <>
                       <button
                         type="button"
                         onClick={() => openEditModal(member)}
-                        className="px-3 py-2 rounded-lg bg-slate-100 text-[#172B45] text-xs font-semibold"
+                        className="h-9 rounded-lg bg-slate-100 text-[#172B45] text-xs font-semibold flex items-center justify-center gap-1"
                       >
-                        تعديل
+                        <Pencil className="w-3.5 h-3.5" />
+                        <span>تعديل</span>
                       </button>
                       <button
                         type="button"
-                        onClick={() => setDeleteTarget(member)}
-                        className="px-3 py-2 rounded-lg bg-[#DC5555]/10 text-[#DC5555] text-xs font-semibold"
+                        onClick={() => setArchiveTarget(member)}
+                        className={`h-9 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 ${
+                          member.memberStatus === 'نشط'
+                            ? 'bg-[#E99A35]/14 text-[#C67B1B]'
+                            : 'bg-[#16A36A]/10 text-[#16A36A]'
+                        }`}
                       >
-                        حذف
+                        {member.memberStatus === 'نشط' ? (
+                          <>
+                            <Archive className="w-3.5 h-3.5" />
+                            <span>أرشفة</span>
+                          </>
+                        ) : (
+                          <>
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>تفعيل</span>
+                          </>
+                        )}
                       </button>
                     </>
                   )}
@@ -432,14 +576,20 @@ export function MembersPage({
         </>
       )}
 
-      {/* Add / Edit Member Modal */}
+      {/* Add / Edit Member Modal (Strictly Approved Fields Only) */}
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editingMember ? 'تعديل بيانات العضو' : 'إضافة عضو جديد'}
-        subtitle="أدخل البيانات الأساسية للعضو وحدد المجموعة التابعة له"
+        subtitle="البيانات المعتمدة: الاسم، رقم الهوية، تاريخ الميلاد، والمجموعة التابعة له"
       >
         <form onSubmit={handleSave} className="space-y-4">
+          {formError && (
+            <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/25 text-[#DC5555] text-xs font-semibold">
+              {formError}
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold text-[#172B45] mb-1.5">الاسم الكامل</label>
             <input
@@ -460,7 +610,7 @@ export function MembersPage({
                 required
                 value={formNationalId}
                 onChange={(e) => setFormNationalId(e.target.value)}
-                placeholder="10xxxxxxxx"
+                placeholder="أدخل رقم الهوية"
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm tabular-nums focus:outline-none focus:border-[#2878C8]"
               />
             </div>
@@ -470,6 +620,7 @@ export function MembersPage({
               <input
                 type="date"
                 required
+                max={getTodayIsoDate()}
                 value={formBirthDate}
                 onChange={(e) => setFormBirthDate(e.target.value)}
                 className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm tabular-nums focus:outline-none focus:border-[#2878C8]"
@@ -477,7 +628,7 @@ export function MembersPage({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div className={editingMember ? 'grid grid-cols-1 sm:grid-cols-2 gap-3.5' : ''}>
             <div>
               <label className="block text-xs font-bold text-[#172B45] mb-1.5">
                 المجموعة التابعة له
@@ -495,30 +646,25 @@ export function MembersPage({
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-[#172B45] mb-1.5">رقم الجوال</label>
-              <input
-                type="text"
-                value={formPhone}
-                onChange={(e) => setFormPhone(e.target.value)}
-                placeholder="05xxxxxxxx"
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm tabular-nums focus:outline-none focus:border-[#2878C8]"
-              />
-            </div>
+            {editingMember && (
+              <div>
+                <label className="block text-xs font-bold text-[#172B45] mb-1.5">حالة العضوية</label>
+                <select
+                  value={formMemberStatus}
+                  onChange={(e) => setFormMemberStatus(e.target.value as MemberStatus)}
+                  className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
+                >
+                  <option value="نشط">نشط</option>
+                  <option value="موقوف">موقوف / مؤرشف</option>
+                </select>
+              </div>
+            )}
           </div>
 
-          {editingMember && (
-            <div>
-              <label className="block text-xs font-bold text-[#172B45] mb-1.5">حالة الاشتراك</label>
-              <select
-                value={formStatus}
-                onChange={(e) => setFormStatus(e.target.value as SubscriptionStatus)}
-                className="w-full h-11 px-3.5 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-[#2878C8]"
-              >
-                <option value="مسدد">مسدد</option>
-                <option value="مسدد جزئياً">مسدد جزئياً</option>
-                <option value="متأخر">متأخر</option>
-              </select>
+          {!editingMember && (
+            <div className="p-3 rounded-xl bg-[#F8FAFC] border border-slate-200/80 text-[11px] text-[#748399]">
+              يتم تسجيل العضو الجديد برصيد سداد مبدئي (0 ر.س) ويُحسب له اشتراك السنة المالية الحالية
+              حتى يتم تسجيل مدفوعاته في سجل السداد.
             </div>
           )}
 
@@ -526,13 +672,13 @@ export function MembersPage({
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-[#172B45] transition-colors cursor-pointer"
+              className="h-10 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold text-[#172B45] transition-colors cursor-pointer"
             >
               إلغاء
             </button>
             <button
               type="submit"
-              className="px-5 py-2.5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-sm font-semibold text-white transition-colors cursor-pointer"
+              className="h-10 px-5 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-sm font-semibold text-white transition-colors cursor-pointer"
             >
               حفظ البيانات
             </button>
@@ -541,11 +687,17 @@ export function MembersPage({
       </Modal>
 
       <ConfirmModal
-        isOpen={Boolean(deleteTarget)}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && onDeleteMember(deleteTarget.id)}
-        title="تأكيد حذف العضو"
-        message={`هل أنت متأكد من حذف العضو "${deleteTarget?.name ?? ''}" من سجل الصندوق؟`}
+        isOpen={Boolean(archiveTarget)}
+        onClose={() => setArchiveTarget(null)}
+        onConfirm={() => archiveTarget && onToggleArchiveMember(archiveTarget.id)}
+        variant={archiveTarget?.memberStatus === 'نشط' ? 'warning' : 'primary'}
+        confirmLabel={archiveTarget?.memberStatus === 'نشط' ? 'تأكيد الأرشفة' : 'تأكيد التفعيل'}
+        title={archiveTarget?.memberStatus === 'نشط' ? 'تأكيد إيقاف / أرشفة العضو' : 'إعادة تفعيل العضو'}
+        message={
+          archiveTarget?.memberStatus === 'نشط'
+            ? `سيتم تحويل حالة العضو "${archiveTarget?.name ?? ''}" إلى موقوف مع الحفاظ الكامل على تاريخه المالي وسجلات السداد والقطات دون حذف.`
+            : `هل تريد إعادة تفعيل العضو "${archiveTarget?.name ?? ''}" إلى الحالة النشطة؟`
+        }
       />
     </div>
   );
@@ -581,14 +733,23 @@ function MemberDetailsView({
   let totalPaidAll = 0;
   let totalRemainingAll = 0;
 
-  const yearRows = memberSubs.map((sub) => {
-    const cfg = yearConfigs.find((y) => y.year === sub.year);
-    const totals = computeMemberYearTotals(sub, cfg);
-    totalDueAll += totals.totalDue;
-    totalPaidAll += totals.totalPaid;
-    totalRemainingAll += totals.remaining;
-    return { sub, cfg, totals };
-  });
+  const yearRows = [...memberSubs]
+    .sort((a, b) => a.year - b.year)
+    .map((sub) => {
+      const cfg = yearConfigs.find((y) => y.year === sub.year);
+      const totals = computeMemberYearTotals(sub, cfg);
+      const isFutureUntouched =
+        isFutureScheduledYear(sub.year) &&
+        toHalalas(totals.totalPaid) === 0 &&
+        !isSubscriptionRowOverdue(sub, totals, sub.year);
+
+      totalPaidAll = addCurrency(totalPaidAll, totals.totalPaid);
+      if (!isFutureUntouched) {
+        totalDueAll = addCurrency(totalDueAll, totals.totalDue);
+        totalRemainingAll = addCurrency(totalRemainingAll, totals.remaining);
+      }
+      return { sub, cfg, totals, isFutureUntouched };
+    });
 
   const memberPayments = payments.filter((p) => p.memberId === member.id);
   const memberQittat = qittat
@@ -608,12 +769,12 @@ function MemberDetailsView({
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-5 sm:space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2.5">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white border border-slate-200 hover:border-[#2878C8] text-sm font-semibold text-[#172B45] transition-colors cursor-pointer"
+          className="h-10 inline-flex items-center gap-2 px-3.5 rounded-xl bg-white border border-slate-200 hover:border-[#2878C8] text-xs sm:text-sm font-semibold text-[#172B45] transition-colors cursor-pointer"
         >
           <ArrowRight className="w-4 h-4" />
           <span>العودة لقائمة الأعضاء</span>
@@ -623,7 +784,7 @@ function MemberDetailsView({
           <button
             type="button"
             onClick={onEdit}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-sm font-semibold text-white transition-colors cursor-pointer"
+            className="h-10 inline-flex items-center gap-2 px-4 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-xs sm:text-sm font-semibold text-white transition-colors cursor-pointer"
           >
             <Pencil className="w-4 h-4" />
             <span>تعديل بيانات العضو</span>
@@ -632,63 +793,56 @@ function MemberDetailsView({
       </div>
 
       {/* Member Profile Header Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)]">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 sm:p-6 shadow-[0_1px_3px_rgba(18,59,112,0.04)]">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#123B70] to-[#2878C8] text-white text-xl font-bold flex items-center justify-center shrink-0">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#123B70] to-[#2878C8] text-white text-lg sm:text-xl font-bold flex items-center justify-center shrink-0">
               {member.name.slice(0, 1)}
             </div>
-            <div>
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="text-xl font-bold text-[#172B45]">{member.name}</h1>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-bold text-[#172B45]">{member.name}</h1>
                 <StatusIndicator
                   label={member.subscriptionStatus}
                   tone={getStatusTone(member.subscriptionStatus)}
                 />
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-[#748399]">
-                <span>عضو {member.memberStatus}</span>
+                <span>الحالة: {member.memberStatus}</span>
                 <span>·</span>
-                <span>الرقم التسلسلي: #{member.serial}</span>
+                <span className="tabular-nums">الرقم التسلسلي: #{member.serial}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
           <div className="flex items-center gap-2.5">
             <CreditCard className="w-4 h-4 text-[#2878C8] shrink-0" />
-            <div>
+            <div className="min-w-0">
               <div className="text-[11px] text-[#748399]">رقم الهوية</div>
               <div className="font-semibold text-[#172B45] tabular-nums">{member.nationalId}</div>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
             <Calendar className="w-4 h-4 text-[#2878C8] shrink-0" />
-            <div>
+            <div className="min-w-0">
               <div className="text-[11px] text-[#748399]">تاريخ الميلاد</div>
               <div className="font-semibold text-[#172B45] tabular-nums">{member.birthDate}</div>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
             <Layers className="w-4 h-4 text-[#2878C8] shrink-0" />
-            <div>
+            <div className="min-w-0">
               <div className="text-[11px] text-[#748399]">المجموعة</div>
-              <div className="font-semibold text-[#172B45]">{member.groupName}</div>
+              <div className="font-semibold text-[#172B45] truncate">{member.groupName}</div>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
             <Calendar className="w-4 h-4 text-[#2878C8] shrink-0" />
-            <div>
-              <div className="text-[11px] text-[#748399]">تاريخ الانضمام</div>
+            <div className="min-w-0">
+              <div className="text-[11px] text-[#748399]">تاريخ الإضافة</div>
               <div className="font-semibold text-[#172B45] tabular-nums">{member.joinDate}</div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <Phone className="w-4 h-4 text-[#2878C8] shrink-0" />
-            <div>
-              <div className="text-[11px] text-[#748399]">رقم الجوال</div>
-              <div className="font-semibold text-[#172B45] tabular-nums">{member.phone}</div>
             </div>
           </div>
         </div>
@@ -699,7 +853,7 @@ function MemberDetailsView({
         <StatCard
           title="إجمالي الاشتراكات المستحقة"
           value={formatCurrency(totalDueAll)}
-          subtitle="لكافة السنوات المسجلة"
+          subtitle="للسنوات المستحقة والنشطة"
           icon={CreditCard}
           accent="blue"
         />
@@ -721,13 +875,13 @@ function MemberDetailsView({
 
       {/* Tabs */}
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-[0_1px_3px_rgba(18,59,112,0.04)] overflow-hidden">
-        <div className="flex items-center gap-1 p-2 bg-[#F8FAFC] border-b border-slate-200/80 overflow-x-auto">
+        <div className="flex items-center gap-1.5 p-2 bg-[#F8FAFC] border-b border-slate-200/80 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
+              className={`h-9 px-3.5 rounded-lg text-xs sm:text-sm font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
                 activeTab === tab.id
                   ? 'bg-[#2878C8] text-white shadow-sm'
                   : 'text-[#748399] hover:text-[#172B45] hover:bg-white'
@@ -738,24 +892,33 @@ function MemberDetailsView({
           ))}
         </div>
 
-        <div className="p-5">
+        <div className="p-4 sm:p-5">
           {activeTab === 'subscriptions' && (
             <div className="space-y-4">
               {yearRows.length === 0 ? (
                 <p className="text-sm text-[#748399]">لا توجد اشتراكات مسجلة لهذا العضو بعد.</p>
               ) : (
-                yearRows.map(({ sub, totals }) => (
+                yearRows.map(({ sub, cfg, totals, isFutureUntouched }) => (
                   <div key={sub.year} className="rounded-xl border border-slate-200 p-4 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="font-bold text-[#123B70]">السنة المالية {sub.year}</div>
-                      <div className="flex flex-wrap items-center gap-4 text-xs tabular-nums">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-[#123B70]">السنة المالية {sub.year}</span>
+                        {isFutureUntouched && (
+                          <StatusIndicator label="سنة قادمة مجدولة" tone="neutral" />
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-xs tabular-nums">
                         <span>المستحق: {formatCurrency(totals.totalDue)}</span>
                         <span className="text-[#16A36A] font-semibold">
                           المسدد: {formatCurrency(totals.totalPaid)}
                         </span>
                         <span
                           className={
-                            totals.remaining > 0 ? 'text-[#DC5555] font-bold' : 'text-[#748399]'
+                            totals.remaining > 0
+                              ? isFutureUntouched
+                                ? 'text-[#748399]'
+                                : 'text-[#DC5555] font-bold'
+                              : 'text-[#748399]'
                           }
                         >
                           المتبقي: {formatCurrency(totals.remaining)}
@@ -763,8 +926,16 @@ function MemberDetailsView({
                       </div>
                     </div>
 
+                    <div className="text-xs flex items-center justify-between p-2.5 rounded-lg bg-[#F8FAFC] border border-slate-200/70">
+                      <span className="text-[#748399]">رسوم التأسيس السنوية:</span>
+                      <span className="font-bold tabular-nums text-[#172B45]">
+                        {formatCurrency(totals.foundingPaid)} من {formatCurrency(totals.foundingDue)}
+                      </span>
+                    </div>
+
                     <div className="grid grid-cols-3 sm:grid-cols-6 lg:grid-cols-12 gap-2">
                       {sub.months.map((st, idx) => {
+                        const paidAmt = totals.monthPaidAmounts[idx] ?? 0;
                         const cls =
                           st === 'paid'
                             ? 'bg-[#16A36A]/10 text-[#16A36A] border-[#16A36A]/25'
@@ -779,7 +950,7 @@ function MemberDetailsView({
                             : st === 'overdue'
                               ? 'متأخر'
                               : st === 'partial'
-                                ? 'جزئي'
+                                ? `${paidAmt}/${cfg?.monthlyFee ?? 0}`
                                 : 'قادم';
                         return (
                           <div
@@ -787,7 +958,7 @@ function MemberDetailsView({
                             className={`rounded-lg border p-2 text-center ${cls}`}
                           >
                             <div className="text-[11px] font-bold">{ARABIC_MONTHS[idx]}</div>
-                            <div className="text-[10px] mt-0.5 font-medium">{label}</div>
+                            <div className="text-[10px] mt-0.5 font-medium tabular-nums">{label}</div>
                           </div>
                         );
                       })}
@@ -803,14 +974,14 @@ function MemberDetailsView({
               {memberPayments.length === 0 ? (
                 <p className="text-sm text-[#748399]">لا توجد عمليات سداد مسجلة لهذا العضو.</p>
               ) : (
-                <table className="w-full text-right border-collapse">
+                <table className="w-full text-right border-collapse min-w-[600px]">
                   <thead>
                     <tr className="bg-[#F8FAFC] border-b border-slate-200 text-xs font-bold text-[#748399]">
                       <th className="py-3 px-4">السنة</th>
                       <th className="py-3 px-4">الأشهر / البيان</th>
-                      <th className="py-3 px-4">المستحق</th>
+                      <th className="py-3 px-4">المطلوب قبل</th>
                       <th className="py-3 px-4">المدفوع</th>
-                      <th className="py-3 px-4">المتبقي</th>
+                      <th className="py-3 px-4">المتبقي بعد</th>
                       <th className="py-3 px-4">التاريخ</th>
                       <th className="py-3 px-4">الحالة</th>
                     </tr>
@@ -847,7 +1018,7 @@ function MemberDetailsView({
               {memberQittat.length === 0 ? (
                 <p className="text-sm text-[#748399]">لم يشارك هذا العضو في قطات مسجلة حالياً.</p>
               ) : (
-                <table className="w-full text-right border-collapse">
+                <table className="w-full text-right border-collapse min-w-[520px]">
                   <thead>
                     <tr className="bg-[#F8FAFC] border-b border-slate-200 text-xs font-bold text-[#748399]">
                       <th className="py-3 px-4">اسم القطة</th>
@@ -895,7 +1066,7 @@ function MemberDetailsView({
               {memberAids.length === 0 ? (
                 <p className="text-sm text-[#748399]">لا توجد سجلات معونة زواج لهذا العضو.</p>
               ) : (
-                <table className="w-full text-right border-collapse">
+                <table className="w-full text-right border-collapse min-w-[520px]">
                   <thead>
                     <tr className="bg-[#F8FAFC] border-b border-slate-200 text-xs font-bold text-[#748399]">
                       <th className="py-3 px-4">قيمة المعونة</th>

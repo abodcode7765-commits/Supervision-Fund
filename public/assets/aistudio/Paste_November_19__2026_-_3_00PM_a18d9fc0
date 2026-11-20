@@ -1,0 +1,696 @@
+# برومبت توليد مشروع Flutter Web كامل - "صندوق الإشراف – ذوي محسن"
+## للذكاء الاصطناعي: Gemini 2.5 Pro (أو أحدث) - رد واحد فقط
+
+---
+
+## ⚡ تعليمات حاسمة للذكاء الاصطناعي
+
+**أعطني الكود كاملًا في رد واحد فقط.** لا تسأل أسئلة، لا تطلب توضيحات، لا تقسم الرد إلى أجزاء.
+
+**تنسيق الإخراج المطلوب:**
+```
+=== FILE: lib/main.dart ===
+// كود الملف كاملاً
+
+=== FILE: lib/config/app_router.dart ===
+// كود الملف كاملاً
+
+... وهكذا لجميع الملفات بالترتيب المنطقي (dependencies أولًا، ثم core، ثم features، ثم main)
+```
+
+**عدد الملفات المتوقع:** 120+ ملف Dart + ملفات إعدادات (pubspec.yaml, .env.example, web/*, CI/CD, إلخ)
+
+---
+
+## 1. نظرة عامة على المشروع
+
+**اسم التطبيق:** صندوق الإشراف – ذوي محسن  
+**النوع:** تطبيق إدارة مالية عائلية موحد (Single Codebase)  
+**المنصات المستهدفة:** **Web أولاً** (PWA محسّن)، ثم iOS/Android/Desktop بنفس الكود  
+**اللغة الأساسية:** العربية (RTL) مع دعم إنجليزي (LTR)  
+**حالة البيانات:** `USE_MOCK_DATA=true` (بيانات بذرة محلية كاملة، بدون backend حقيقي)
+
+---
+
+## 2. المتطلبات الوظيفية - 13 وحدة مكتملة
+
+### 2.1 المصادقة (Auth)
+- تسجيل دخول: اسم مستخدم + كلمة مرور + تذكرني
+- دخول بالبصمة/الوجه (local_auth)
+- 3 أدوار بصلاحيات مختلفة (RBAC):
+  1. **مدير الصندوق** - وصول كامل لجميع الوحدات (13)
+  2. **رئيس المجموعة** - أعضاء، مجموعات، اشتراكات، متأخرات، رئيسية
+  3. **مسؤول القطات** - القطات فقط
+- تبديل أدوار تجريبي سريع (للاختبار)
+- استعادة جلسة تلقائية، تسجيل خروج
+
+### 2.2 لوحة التحكم (Dashboard)
+- 8 بطاقات إحصائية (StatCards) بأيقونات وألوان مميزة
+- مخطط أعمدة: إيرادات vs مصروفات (12 شهر) - fl_chart
+- مخطط دونات: توزيع حالات السداد (مسدد/جزئي/متأخر)
+- اختصارات سريعة للوحدات المسموحة حسب الدور
+- تنبيه "وضع العمل دون اتصال" عند قطع الإنترنت
+- نطاق بيانات: شامل (مدير) أو مقتصر على مجموعة المستخدم (رئيس مجموعة)
+
+### 2.3 الأعضاء (Members)
+- قائمة 16 عضو بذرة مع: الاسم، الهوية، الميلاد، المجموعة، الانضمام، الحالة، السداد، الجوال
+- بحث فوري (اسم/هوية)، فلترة: مجموعة، حالة سداد
+- ترقيم صفحات (Load more)
+- إضافة/تعديل عضو (Dialog مع حقلة كاملة)
+- نقل عضو بين المجموعات
+- **صفحة تفاصيل عضو** بتبويبات: الاشتراكات، المدفوعات، القطات، معونة الزواج
+
+### 2.4 المجموعات (Groups)
+- 5 مجموعات عائلية بذرة: الاسم، الوصف، الرئيس، عدد أساسي، تاريخ إنشاء
+- عرض أعضاء كل مجموعة
+- إضافة/تعديل مجموعة (تعيين رئيس من الأعضاء)
+- نقل أعضاء بين المجموعات
+
+### 2.5 الاشتراكات (Subscriptions)
+- **مصفوفة سنوية 2022–2026** لكل عضو
+- كل سنة: رسوم تأسيس + اشتراك شهري (قابلة للتعديل)
+- 12 شهرًا لكل سنة بحالات: `paid` | `overdue` | `partial` | `upcoming`
+- شارات حالة ملونة لكل شهر
+- تعديل رسوم سنة محددة (Dialog) - يؤثر على السنوات اللاحقة فقط
+- فلترة حسب سنة، مجموعة
+
+### 2.6 المدفوعات (Payments)
+- سجل كامل: العضو، البند، المستحق، المدفوع، المتبقي، الطريقة، التاريخ، الحالة، ملاحظات
+- طرق دفع: تحويل بنكي، نقدي، شيك
+- تسجيل سداد **كامل أو جزئي** (Dialog مع حساب المتبقي فوريًا)
+- تحديث تلقائي لحالة اشتراك العضو (مسدد/مسدد جزئياً)
+- فلترة: مكتمل / مدفوع جزئياً
+- إحصائيات: إجمالي مدفوع، إجمالي متبقي جزئي
+
+### 2.7 المتأخرات (Overdue)
+- كشف الأعضاء: متأخر + مسدد جزئياً
+- حساب المبلغ المتأخر تقديريًا (أشهر × رسوم + تأسيس)
+- أزرار: إرسال تذكير (SnackBar)، تسجيل سداد فوري (ينقل لصفحة المدفوعات)
+- عدد الأشهر المتأخرة تقديري
+
+### 2.8 القطات (Qittat)
+- إنشاء قطة: اسم، سبب، وصف، مبلغ إجمالي، مشاركون (اختيار متعدد من الأعضاء)
+- قسمة المبلغ بالتساوي على المشاركين
+- تتبع لكل مشارك: الحصة، المسدد، الحالة (سدد كامل/جزئي/لم يدفع)
+- تسجيل دفعة لمشارك (Dialog) → تحديث حالة القطة تلقائيًا (جديدة → قيد التحصيل → مكتملة)
+- شريط تقدم عام للقطة
+- صفحة تفاصيل قطة: قائمة مشاركين مع تسجيل دفعات
+
+### 2.9 معونة الزواج (Marriage Aid)
+- تسجيل طلب: المستفيد (من الأعضاء)، المبلغ، تاريخ استحقاق، ملاحظات
+- حالات: `مستحقة` | `تم الصرف` | `قيد الانتظار`
+- اعتماد صرف (تحديث التاريخ والحالة)
+- عرض التفاصيل في Dialog
+
+### 2.10 مصروفات الصندوق (Expenses)
+- سند صرف: رقم عملية، عنوان، سبب، فئة، مبلغ، رصيد قبل/بعد، المسجل، ملاحظات
+- فئات: ضيافة، مساعدات عاجلة، تشغيل، صيانة، دعم أسري
+- **حساب رصيد الصندوق تلقائيًا** (إيرادات - مصروفات)
+- إضافة مصروف جديد (Dialog مع معاينة الرصيد المتوقع)
+
+### 2.11 التقارير (Reports)
+- 10 تقارير قابلة للاختيار من Dropdown:
+  1. التقرير المالي الشامل
+  2. تقرير الأعضاء
+  3. تقرير المجموعات
+  4. الاشتراكات السنوية
+  5. الاشتراكات الشهرية
+  6. المدفوعات
+  7. المتأخرات
+  8. المصروفات
+  9. القطات
+  10. مساعدات الزواج
+- أزرار: تصدير PDF، تصدير Excel، طباعة (SnackBar "جاهز للربط")
+- عرض بيانات التقرير في بطاقة منظمة
+
+### 2.12 المستخدمون والصلاحيات (Users)
+- إدارة حسابات النظام (إضافة/تفعيل/تعطيل)
+- لكل مستخدم: الاسم، اسم المستخدم، الدور، المجموعة، الصلاحيات (قائمة مسارات)، الحالة
+- إنشاء مستخدم جديد: اختيار دور → يملأ الصلاحيات الافتراضية → تخصيص بالـ FilterChips
+- صلاحيات مستمدة من `appNavItems` (13 مسار)
+
+### 2.13 الإعدادات (Settings)
+- اسم الصندوق، الفرع/العائلة، المدينة
+- لغة الواجهة: عربية (RTL) / إنجليزية (LTR) - تبديل فوري
+- تفضيلات تنبيهات: عند السداد، متأخرات شهرية
+- رابط سريع لإدارة المستخدمين (للمدير فقط)
+
+---
+
+## 3. البنية المعمارية الإلزامية (Clean Architecture + Feature-First)
+
+```
+lib/
+├── config/
+│   ├── env_config.dart          # متغيرات البيئة (dotenv)
+│   └── app_router.dart          # GoRouter + ShellRoute + RBAC redirect
+├── core/
+│   ├── constants/
+│   │   └── app_constants.dart   # ثوابت: breakpoints، مفاتيح Hive، شهور عربية
+│   ├── errors/
+│   │   ├── failures.dart        # Sealed classes: Failure, NetworkFailure, CacheFailure, AuthFailure, ValidationFailure, ServerFailure
+│   │   └── result.dart          # Sealed Result<T>: SuccessResult, FailureResult + fold pattern matching
+│   ├── network/
+│   │   └── dio_client.dart      # Dio + AuthInterceptor (JWT + Refresh) + RetryInterceptor + Connectivity stream
+│   ├── storage/
+│   │   └── local_storage_service.dart  # Singleton Hive + SecureStorage (init, write/read JSON, secure)
+│   ├── theme/
+│   │   ├── app_colors.dart      # لوحة ألوان: royalBlue, primaryBlue, iceBlue, success, warning, danger, textPrimary...
+│   │   └── app_theme.dart       # ThemeData (Material 3، خط Noto Sans Arabic، tabular figures، AppBar، Input، Buttons)
+│   └── utils/
+│       ├── formatters.dart      # number(), currency(), todayArabicDate()
+│       └── responsive.dart      # ScreenSize enum، gridColumns، isMobile/Tablet/Desktop
+├── features/
+│   ├── auth/
+│   │   ├── data/
+│   │   │   ├── datasources/auth_datasources.dart      # Seed users، Remote/Local DataSource
+│   │   │   ├── models/auth_user_model.dart            # extends AuthUser + fromJson/toJson
+│   │   │   └── repositories/auth_repository_impl.dart
+│   │   ├── domain/
+│   │   │   ├── entities/auth_user.dart                # id, name, username, role, groupId, groupName, allowedRoutes, status + canAccessRoute
+│   │   │   ├── repositories/auth_repository.dart      # login, loginWithBiometrics, restoreSession, logout
+│   │   │   └── usecases/login_usecase.dart
+│   │   └── presentation/
+│   │       ├── controllers/auth_controller.dart       # StateNotifier<AuthState> + providers
+│   │       └── pages/login_page.dart                  # Responsive (Desktop: side-by-side، Mobile: stacked)
+│   ├── dashboard/ ... (نفس النمط)
+│   ├── members/ ...
+│   ├── groups/ ...
+│   ├── subscriptions/ ...
+│   ├── payments/ ...
+│   ├── overdue/ ...
+│   ├── qittat/ ...
+│   ├── marriage_aid/ ...
+│   ├── expenses/ ...
+│   ├── reports/ ...
+│   ├── users/ ...
+│   └── settings/ ...
+├── shared/
+│   └── widgets/
+│       ├── app_shell.dart          # Scaffold موحد: AppBar، Sidebar (Desktop)، NavigationRail (Tablet)، BottomNav (Mobile)، Drawer، User menu، Demo role switch، Offline banner
+│       ├── app_card.dart           # بطاقة موحدة مع ظل، حدود، onTap اختياري
+│       ├── stat_card.dart          # بطاقة إحصائية: عنوان، قيمة، وصف فرعي، أيقونة، لون مميز
+│       ├── status_badge.dart       # شارة حالة ملونة + factory.fromStatus(string)
+│       ├── state_views.dart        # LoadingStateView، EmptyStateView، ErrorStateView
+│       ├── logo_mark.dart          # شعار الصندوق (أيقونة account_balance)
+│       └── index.dart              # Barrel export
+├── l10n/
+│   ├── app_localizations.dart        # Generated
+│   ├── app_localizations_ar.dart     # ترجمة عربية كاملة
+│   └── app_localizations_en.dart     # ترجمة إنجليزية كاملة
+└── main.dart                         # نقطة الدخول: dotenv، LocalStorage، ProviderScope، MaterialApp.router
+```
+
+---
+
+## 4. التقنيات والإصدارات الدقيقة (pubspec.yaml)
+
+```yaml
+name: alishraf_fund
+description: نظام صندوق الإشراف (ذوي محسن) - تطبيق إدارة مالية عائلية موحد
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.3
+  flutter_riverpod: ^2.6.1
+  go_router: ^14.6.2
+  dio: ^5.7.0
+  connectivity_plus: ^6.1.0
+  hive_flutter: ^1.1.0
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+  flutter_dotenv: ^5.2.1
+  fl_chart: ^0.69.0
+  cached_network_image: ^3.4.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  mocktail: ^1.0.4
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - .env
+```
+
+---
+
+## 5. متطلبات الويب الخاصة (Web-First)
+
+### 5.1 PWA (`web/manifest.json`)
+- name: "صندوق الإشراف – ذوي محسن"
+- short_name: "صندوق الإشراف"
+- theme_color: "#123B70" (royalBlue)
+- background_color: "#F5F7FA"
+- icons: 192، 512، maskable
+- display: standalone
+- orientation: portrait-primary
+
+### 5.2 SEO & Meta (`web/index.html`)
+- `<html lang="ar" dir="rtl">`
+- Meta: description، og:title، og:description، og:type
+- theme-color: #123B70
+- Apple touch icons، favicon
+- `<base href="$FLUTTER_BASE_HREF">`
+- RTL CSS reset للخطوط العربية
+
+### 5.3 Responsive Breakpoints
+- Mobile: ≤ 600px (BottomNav، Drawer، Stacked layout)
+- Tablet: 601–1024px (NavigationRail، 2-column grids)
+- Desktop: > 1024px (Sidebar ثابت 256px، 4-column grids، Side-by-side login)
+
+### 5.4 خط العربية
+- **Noto Sans Arabic** (Google Fonts) - محمل في `web/index.html`
+- `fontFamily: 'Noto Sans Arabic'` في ThemeData
+- `FontFeature.tabularFigures()` للأرقام في البطاقات والجداول
+
+---
+
+## 6. نظام المصادقة والصلاحيات (RBAC) - تفصيل تقني
+
+### 6.1 `AuthUser` Entity
+```dart
+class AuthUser {
+  final String id, name, username, role, groupName;
+  final String? groupId;
+  final List<String> allowedRoutes;
+  final String status;
+  // computed: isAdmin, isGroupLeader, isQittatManager, defaultRoute, canAccessRoute(route)
+}
+```
+
+### 6.2 `appNavItems` (13 عنصر)
+```dart
+const appNavItems = [
+  AppNavItem('/dashboard', 'الرئيسية', Icons.dashboard_rounded),
+  AppNavItem('/members', 'الأعضاء', Icons.people_alt_rounded),
+  AppNavItem('/groups', 'المجموعات', Icons.layers_rounded),
+  AppNavItem('/subscriptions', 'الاشتراكات', Icons.calendar_month_rounded),
+  AppNavItem('/payments', 'سجل السداد', Icons.receipt_long_rounded),
+  AppNavItem('/overdue', 'المتأخرات', Icons.warning_amber_rounded),
+  AppNavItem('/qittat', 'القطات', Icons.monetization_on_rounded),
+  AppNavItem('/marriage-aid', 'معونة الزواج', Icons.volunteer_activism_rounded),
+  AppNavItem('/expenses', 'مصروفات الصندوق', Icons.account_balance_wallet_rounded),
+  AppNavItem('/reports', 'التقارير والكشوفات', Icons.bar_chart_rounded),
+  AppNavItem('/users', 'المستخدمون والصلاحيات', Icons.admin_panel_settings_rounded),
+  AppNavItem('/settings', 'الإعدادات', Icons.settings_rounded),
+];
+```
+
+### 6.3 بذور المستخدمين (3 حسابات)
+```dart
+seedAuthUsers = [
+  // مدير الصندوق - جميع المسارات
+  AuthUserModel(id: 'usr-1', name: 'محمد محسن', username: 'm.mohsen', role: 'مدير الصندوق',
+    groupName: 'جميع المجموعات', allowedRoutes: allRoutes, status: 'نشط'),
+  // رئيس مجموعة - 5 مسارات
+  AuthUserModel(id: 'usr-2', name: 'أحمد عبدالله', username: 'a.abdullah', role: 'رئيس المجموعة',
+    groupId: 'grp-2', groupName: 'مجموعة ذوي عبدالله',
+    allowedRoutes: [dashboard, members, groups, subscriptions, overdue], status: 'نشط'),
+  // مسؤول القطات - مسار واحد
+  AuthUserModel(id: 'usr-4', name: 'تركي عبدالله', username: 't.abdullah', role: 'مسؤول القطات',
+    groupId: 'grp-5', groupName: 'مجموعة الشباب والناشئة',
+    allowedRoutes: [qittat], status: 'نشط'),
+];
+```
+
+### 6.4 `AppRouter` Redirect Logic
+```dart
+redirect: (context, state) {
+  final user = ref.read(authControllerProvider).user;
+  final isLogin = state.matchedLocation == '/login';
+  if (user == null) return isLogin ? null : '/login';
+  if (isLogin) return user.defaultRoute;
+  final baseSegment = '/' + state.matchedLocation.split('/').where((s)=>s.isNotEmpty).firstOrNull ?? 'dashboard';
+  if (!user.canAccessRoute(baseSegment)) return user.defaultRoute;
+  return null;
+}
+```
+- `ShellRoute` مع `AppShell` للمسارات المحمية
+- `refreshListenable` يعيد التوجيه عند تغيير المصادقة
+
+---
+
+## 7. البيانات البذرية (Seed Data) - كاملة وجاهزة
+
+### 7.1 الأعضاء (16 عضو)
+```dart
+seedMembers = [
+  MemberModel(id: 'mem-1', serial: 1, name: 'محمد محسن', nationalId: '1045829103',
+    birthDate: '1978-04-12', groupId: 'grp-1', groupName: 'مجموعة أبناء محسن الأول',
+    joinDate: '2022-01-10', memberStatus: 'نشط', subscriptionStatus: 'مسدد', phone: '0504821930'),
+  MemberModel(id: 'mem-2', serial: 2, name: 'أحمد عبدالله', nationalId: '1059203841',
+    birthDate: '1981-08-23', groupId: 'grp-2', groupName: 'مجموعة ذوي عبدالله',
+    joinDate: '2022-02-15', memberStatus: 'نشط', subscriptionStatus: 'مسدد', phone: '0559102834'),
+  // ... 14 عضوًا آخر بتنوع: مسدد، متأخر، مسدد جزئياً، موقوف
+  // mem-3: متأخر، mem-4: مسدد جزئياً، mem-7: متأخر، mem-9: متأخر، mem-12: متأخر،
+  // mem-14: متأخر، mem-15: موقوف + مسدد جزئياً، mem-16: مسدد
+];
+```
+
+### 7.2 المجموعات (5 مجموعات)
+```dart
+seedGroups = [
+  FamilyGroup('grp-1', 'مجموعة أبناء محسن الأول', 'mem-1', 'محمد محسن',
+    'المجموعة الرئيسية لأبناء الفرع الأول...', '2022-01-10', 28),
+  FamilyGroup('grp-2', 'مجموعة ذوي عبدالله', 'mem-2', 'أحمد عبدالله',
+    'تضم أبناء وأحفاد عبدالله...', '2022-02-15', 24),
+  FamilyGroup('grp-3', 'مجموعة ذوي علي', 'mem-5', 'فهد علي', ...),
+  FamilyGroup('grp-4', 'مجموعة ذوي صالح', 'mem-6', 'عبدالرحمن صالح', ...),
+  FamilyGroup('grp-5', 'مجموعة الشباب والناشئة', 'mem-8', 'تركي عبدالله', ...),
+];
+```
+
+### 7.3 إعدادات الاشتراكات (5 سنوات)
+```dart
+seedYearConfigs = [
+  YearConfig(2022, foundingFee: 100, monthlyFee: 30),
+  YearConfig(2023, foundingFee: 100, monthlyFee: 40),
+  YearConfig(2024, foundingFee: 150, monthlyFee: 50),
+  YearConfig(2025, foundingFee: 150, monthlyFee: 50),
+  YearConfig(2026, foundingFee: 200, monthlyFee: 50),
+];
+```
+- توليد `MemberYearSubscription` تلقائيًا لكل عضو بناءً على `joinDate` وحالة السداد
+
+### 7.4 المدفوعات (5 سجلات بذرة)
+- متنوعة: مكتمل، مدفوع جزئياً، طرق دفع مختلفة، سنوات/أشهر مختلفة
+
+### 7.5 القطات (2 قطة بذرة)
+- قطة اجتماع العيد: 12000 ر.س، 6 مشاركين، حالات متنوعة
+- قطة استراحة: 1000 ر.س، 5 مشاركين، حالات متنوعة
+
+### 7.6 معونة الزواج (3 طلبات)
+- mem-8: تم الصرف (مايو 2026)
+- mem-10: مستحقة (نوفمبر 2026)
+- mem-16: قيد الانتظار (ديسمبر 2026)
+
+### 7.7 المصروفات (3 سندات)
+- مع رصيد قبل/بعد مترابط (24400 → 23450 → 27900 → 28350)
+
+---
+
+## 8. متطلبات التصميم - "أفضل بكثير" (Modern & Polished)
+
+### 8.1 نظام ألوان محسّن (Material 3 Expressive)
+```dart
+// ألوان أساسية أعمق وأكثر تميزًا
+royalBlue: 0xFF0D2B5A      // أعمق للـ Sidebar/AppBar
+primaryBlue: 0xFF1E6BB8    // رئيسي للـ Primary actions
+accentBlue: 0xFF3A8FE0     // للـ Hover/Focus states
+iceBlue: 0xFFE8F1FA        // خلفيات خفيفة
+surfaceWhite: 0xFFFFFFFF
+surfaceMuted: 0xFFF0F4F8   // للبطاقات الثانوية
+borderLight: 0xFFDEE6F0
+textPrimary: 0xFF0F1E3A    // أعمق للقراءة
+textSecondary: 0xFF5A6E8A
+success: 0xFF0E8A52
+warning: 0xFFD48B0E
+danger: 0xFFC0392B
+```
+
+### 8.2 تأثيرات بصرية متقدمة
+- **Shadows متعددة الطبقات**: `BoxShadow` مع blur 8-16، offset 0-4، opacity 0.08-0.12
+- **Glassmorphism** للـ AppBar/Sidebar: `backgroundColor.withOpacity(0.85)` + `backdropFilter: ImageFilter.blur(sigmaX: 12, sigmaY: 12)`
+- **Micro-animations**: `AnimatedContainer`، `AnimatedSwitcher`، `Hero` transitions بين الصفحات
+- **Staggered entrance animations** للبطاقات في Dashboard (Interval 100ms)
+- **Hover states** تفاعلية للـ Desktop (Scale 1.02، تغيير لون، ظل أعمق)
+- **Loading skeletons** بدلاً من Spinners بسيطة (shimmer effect)
+- **Page transitions**: `FadeTransition` + `SlideTransition` في GoRouter
+
+### 8.3 Typography محسّن
+- **Display**: 32/28/24px، Weight 800، Letter-spacing -0.5px
+- **Headline**: 22/20/18px، Weight 700
+- **Title**: 16/14px، Weight 600
+- **Body**: 14/13px، Weight 400/500، Line-height 1.6
+- **Caption**: 12/11px، Weight 500، Color textSecondary
+- **Tabular figures** إلزامي لجميع الأرقام المالية
+
+### 8.4 مكونات UI مخصصة (Custom Widgets)
+- `GradientAppBar` مع خلفية متدرجة (royalBlue → primaryBlue)
+- `AnimatedStatCard` مع تأثير count-up للأرقام
+- `InteractiveChart` (fl_chart) مع tooltip، touch interaction، animation على التحميل
+- `SearchableDropdown` مع تصفية فورية
+- `ConfirmDialog` مع تأثير shake عند خطأ
+- `Toast/SnackBar` موحد مع أيقونة، إجراء (Undo)، مدة قابلة للتكوين
+- `ResponsiveDataTable` يتحول إلى Cards على Mobile
+
+### 8.5 Dark Mode (اختياري لكن مُوصى)
+- `ThemeData.dark()` مطابق للألوان الداكنة
+- تبديل فوري عبر `settingsController` + حفظ في Hive
+- ألوان داكنة: `background: 0xFF0B1426`، `surface: 0xFF131E3A`، `border: 0xFF2A3A5A`
+
+---
+
+## 9. الترجمة (l10n) - مفاتيح مطلوبة
+
+### 9.1 `app_en.arb` / `app_ar.arb` - مفاتيح شاملة
+```json
+{
+  "appTitle": "صندوق الإشراف – ذوي محسن",
+  "appSubtitle": "نظام الإدارة المالية العائلي",
+  "loginTitle": "تسجيل الدخول للنظام",
+  "loginSubtitle": "أدخل اسم المستخدم وكلمة المرور للوصول إلى لوحة الصندوق",
+  "usernameLabel": "اسم المستخدم",
+  "passwordLabel": "كلمة المرور",
+  "rememberMe": "تذكرني",
+  "loginButton": "تسجيل الدخول",
+  "biometricLogin": "الدخول بالبصمة",
+  "logout": "تسجيل الخروج",
+  "navDashboard": "الرئيسية",
+  "navMembers": "الأعضاء",
+  "navGroups": "المجموعات",
+  "navSubscriptions": "الاشتراكات",
+  "navPayments": "سجل السداد",
+  "navOverdue": "المتأخرات",
+  "navQittat": "القطات",
+  "navMarriageAid": "معونة الزواج",
+  "navExpenses": "مصروفات الصندوق",
+  "navReports": "التقارير والكشوفات",
+  "navUsers": "المستخدمون والصلاحيات",
+  "navSettings": "الإعدادات",
+  "offlineBanner": "وضع العمل دون اتصال — يتم عرض البيانات المحفوظة محلياً",
+  "retry": "إعادة المحاولة",
+  "emptyTitle": "لا توجد بيانات لعرضها",
+  "currencySar": "ر.س",
+  "searchHint": "ابحث...",
+  "filter": "فلترة",
+  "add": "إضافة",
+  "edit": "تعديل",
+  "delete": "حذف",
+  "save": "حفظ",
+  "cancel": "إلغاء",
+  "confirm": "تأكيد",
+  "close": "إغلاق",
+  "loading": "جاري التحميل...",
+  "errorOccurred": "حدث خطأ",
+  "noData": "لا توجد بيانات",
+  "paid": "مسدد",
+  "partial": "مسدد جزئياً",
+  "overdue": "متأخر",
+  "upcoming": "قادم",
+  "active": "نشط",
+  "inactive": "معطل",
+  "admin": "مدير الصندوق",
+  "groupLeader": "رئيس المجموعة",
+  "qittatManager": "مسؤول القطات",
+  "memberDetails": "تفاصيل العضو",
+  "subscriptionsTab": "الاشتراكات",
+  "paymentsTab": "المدفوعات",
+  "qittatTab": "القطات",
+  "marriageAidTab": "معونة الزواج",
+  "foundingFee": "رسوم التأسيس",
+  "monthlyFee": "الاشتراك الشهري",
+  "totalCollected": "إجمالي المحصل",
+  "totalExpenses": "إجمالي المصروفات",
+  "currentBalance": "الرصيد الحالي",
+  "overdueAmount": "المبلغ المتأخر",
+  "recordPayment": "تسجيل سداد",
+  "createQitta": "إنشاء قطة",
+  "addMarriageAid": "تسجيل معونة",
+  "addExpense": "إضافة مصروف",
+  "exportPDF": "تصدير PDF",
+  "exportExcel": "تصدير Excel",
+  "print": "طباعة",
+  "settingsSaved": "تم حفظ الإعدادات بنجاح",
+  "paymentRecorded": "تم اعتماد السداد بنجاح",
+  "qittaCreated": "تم إنشاء القطة بنجاح",
+  "aidDisbursed": "تم اعتماد الصرف",
+  "userCreated": "تم إنشاء المستخدم بنجاح",
+  "statusToggled": "تم تحديث الحالة"
+}
+```
+
+---
+
+## 10. الاختبارات (Testing Structure)
+
+### 10.1 Unit Tests
+- `test/unit/auth_repository_test.dart`: حقول فارغة، دخول ناجح، فشل مصادقة
+- `test/unit/members_repository_test.dart`: جلب، إضافة، تعديل، فلترة
+- `test/unit/subscriptions_repository_test.dart`: توليد المصفوفة، تعديل رسوم
+
+### 10.2 Widget Tests
+- `test/widget/login_page_test.dart`: عرض العناصر، إدخال نص، ضغط أزرار
+- `test/widget/dashboard_page_test.dart`: عرض البطاقات، الرسوم، الاختصارات
+- `test/widget/members_page_test.dart`: بحث، فلترة، ترقيم
+
+### 10.3 Integration Test
+- `integration_test/app_flow_test.dart`: Login → Dashboard → Members → Logout
+
+---
+
+## 11. CI/CD و إعدادات النشر
+
+### 11.1 GitHub Actions (`.github/workflows/flutter.yml`)
+```yaml
+- flutter pub get
+- flutter gen-l10n
+- flutter analyze
+- flutter test
+- flutter build apk --release
+- flutter build web --release --base-href "/"
+```
+
+### 11.2 Codemagic (`codemagic.yaml`)
+- نفس الخطوات + artifacts: APK + Web build
+
+### 11.3 Fastlane (`fastlane/Fastfile`)
+- Android: `deploy_beta` → App Bundle → Play Store Internal
+- iOS: `deploy_beta` → IPA → TestFlight
+
+### 11.4 Shorebird (`shorebird.yaml`)
+- `app_id` مُهيأ للتحديثات الساخنة
+
+---
+
+## 12. ملفات البيئة
+
+### `.env.example`
+```env
+APP_NAME=صندوق الإشراف – ذوي محسن
+APP_ENV=development
+API_BASE_URL=https://api.alishraf-fund.example.com/v1
+USE_MOCK_DATA=true
+ENABLE_BIOMETRICS=true
+API_TIMEOUT_MS=15000
+```
+
+### `.env` (للنسخ محليًا)
+- نفس القيم
+
+---
+
+## 13. قواعد الكود الإلزامية (Code Standards)
+
+1. **Null Safety صارم** - لا `!` إلا بعد تحقق صريح
+2. **Sealed Classes** للـ Failures و Result - مع `switch` pattern matching
+3. **Immutable Entities** - `final` fields، `copyWith` للتعديل
+4. **Repository Pattern** - Interface في domain، Implementation في data
+5. **UseCase Pattern** - فئة واحدة لكل عملية تجارية
+6. **Riverpod Providers** - `Provider`، `StateNotifierProvider`، `AsyncNotifierProvider`، `FutureProvider`، `StreamProvider`
+7. **ConsumerWidget** / `ConsumerStatefulWidget` - لا `ref.read` في build
+8. **AsyncNotifier** للحالة غير المتزامنة مع `build()` يعيد Future
+9. **GoRouter** للتنقل - `context.go()`، `context.push()`، `ShellRoute`
+10. **Responsive Design** - `Responsive.of(context)`، `LayoutBuilder`، `MediaQuery`
+11. **RTL First** - `Directionality`، `textDirection: TextDirection.rtl`، `EdgeInsetsDirectional`
+12. **Error Handling** - `try/catch` في Controllers، `ErrorStateView` مع `onRetry`
+13. **Loading States** - `AsyncValue.when(loading:, error:, data:)`
+14. **Code Generation** - `flutter gen-l10n` للترجمة، `build_runner` إن استُخدم
+15. **Const Constructors** أينما أمكن
+16. **Barrel Exports** (`index.dart`) لكل feature و shared/widgets
+17. **Comments** فقط للـ Public APIs المعقدة
+18. **Imports مرتبة**: dart:، package:، relative:
+
+---
+
+## 14. قائمة الملفات المطلوبة (Checklist للإخراج)
+
+### Config & Core
+- [ ] lib/main.dart
+- [ ] lib/config/env_config.dart
+- [ ] lib/config/app_router.dart
+- [ ] lib/core/constants/app_constants.dart
+- [ ] lib/core/errors/failures.dart
+- [ ] lib/core/errors/result.dart
+- [ ] lib/core/network/dio_client.dart
+- [ ] lib/core/storage/local_storage_service.dart
+- [ ] lib/core/theme/app_colors.dart
+- [ ] lib/core/theme/app_theme.dart
+- [ ] lib/core/utils/formatters.dart
+- [ ] lib/core/utils/responsive.dart
+
+### Shared Widgets
+- [ ] lib/shared/widgets/app_shell.dart
+- [ ] lib/shared/widgets/app_card.dart
+- [ ] lib/shared/widgets/stat_card.dart
+- [ ] lib/shared/widgets/status_badge.dart
+- [ ] lib/shared/widgets/state_views.dart
+- [ ] lib/shared/widgets/logo_mark.dart
+- [ ] lib/shared/widgets/index.dart
+
+### Features (13 وحدة × ~7 ملفات = ~91 ملف)
+كل وحدة تحتوي على:
+- [ ] data/datasources/*_datasources.dart
+- [ ] data/models/*_model.dart
+- [ ] data/repositories/*_repository_impl.dart
+- [ ] domain/entities/*.dart
+- [ ] domain/repositories/*.dart
+- [ ] domain/usecases/*.dart
+- [ ] presentation/controllers/*_controller.dart
+- [ ] presentation/pages/*_page.dart
+- [ ] presentation/widgets/* (إن وجد، مثل dashboard_charts.dart)
+
+### Localization
+- [ ] lib/l10n/app_localizations.dart (generated stub)
+- [ ] lib/l10n/app_localizations_ar.dart
+- [ ] lib/l10n/app_localizations_en.dart
+
+### Tests
+- [ ] test/unit/auth_repository_test.dart
+- [ ] test/widget/login_page_test.dart
+- [ ] integration_test/app_flow_test.dart
+
+### Configuration Files
+- [ ] pubspec.yaml
+- [ ] .env.example
+- [ ] .env
+- [ ] .gitignore
+- [ ] .github/workflows/flutter.yml
+- [ ] codemagic.yaml
+- [ ] fastlane/Fastfile
+- [ ] shorebird.yaml
+- [ ] web/manifest.json
+- [ ] web/index.html
+- [ ] README.md (مختصر: تشغيل، حسابات، بنية)
+
+---
+
+## 15. تعليمات نهائية للذكاء الاصطناعي
+
+**ابدأ الآن بكتابة الكود.** لا تكتب أي شرح خارجي. أخرج الملفات بالترتيب أعلاه مع marcador `=== FILE: path ===` لكل ملف.
+
+**إذا تجاوز الكود حد الرد:** اكمل في الرسالة التالية مباشرة بدون مقدمة، مع الاستمرار من حيث توقفت.
+
+**جودة الكود:** يجب أن يمر `flutter analyze` بدون أخطاء، و `flutter test` ينجح، و `flutter build web --release` ينتج build صحيح.
+
+**التصميم:** يجب أن يبدو احترافيًا، عصريًا، ومتماسكًا بصريًا - ليس "تطبيق نموذجي" بل منتج جاهز للإنتاج.
+
+**اللغة:** جميع النصوص الظاهرة للمستخدم بالعربية. الكود والتعليقات بالإنجليزية.
+
+---
+
+**ابدأ الإخراج الآن.**
