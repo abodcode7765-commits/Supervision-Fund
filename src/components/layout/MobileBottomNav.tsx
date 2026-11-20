@@ -32,7 +32,8 @@ export function MobileBottomNav({
 
   return (
     <nav
-      className="lg:hidden fixed bottom-0 right-0 left-0 z-30 h-14 bg-white border-t border-slate-200 px-2 flex items-center justify-around no-print"
+      className="lg:hidden fixed bottom-0 right-0 left-0 z-30 bg-white border-t border-slate-200 px-2 flex items-center justify-around no-print"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom)', height: 'calc(3.5rem + env(safe-area-inset-bottom))' }}
       aria-label="التنقل السريع"
     >
       {items.map((item) => {

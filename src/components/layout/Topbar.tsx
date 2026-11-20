@@ -184,6 +184,7 @@ export function Topbar({
         className={`sticky top-0 ${
           notifOpen ? 'z-40' : 'z-30'
         } bg-white/95 backdrop-blur-sm border-b border-slate-200/80 px-3 sm:px-6 h-[56px] lg:h-[68px] flex items-center justify-between gap-2 sm:gap-3 no-print`}
+        style={{ paddingTop: 'env(safe-area-inset-top)', marginTop: 'calc(-1 * env(safe-area-inset-top))' }}
       >
         {/* Right zone: Mobile trigger + Page title & Breadcrumb */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">

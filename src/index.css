@@ -1,6 +1,15 @@
 @import "tailwindcss";
 
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    padding-top: env(safe-area-inset-top);
+  }
   :root {
     --font-display: 'Cairo', 'IBM Plex Sans Arabic', system-ui, sans-serif;
     --font-body: 'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif;
