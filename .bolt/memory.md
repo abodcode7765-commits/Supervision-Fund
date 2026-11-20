@@ -2,31 +2,36 @@
 
 ## Product intent & audience
 
-- Project: **Supervision-Fund** (صندوق الإشراف) — a website originally created by the user using an AI website builder.
-- User likes the current design very much and wants to preserve it exactly as-is — no visual changes, even minor typographic details.
-- User wants to continue developing/extending the project inside Bolt while keeping appearance identical.
+- Project: **Supervision-Fund** (صندوق الإشراف) — Arabic website built with an AI website builder, now in Bolt.
+- User wants to preserve the existing design exactly and continue extending the project.
+- Latest goal: **convert the website into a mobile app while keeping the same design**.
 
 ## Brand personality & voice
 
-- User communicates in **Arabic**; assistant responses should be in Arabic.
-- Tone is helpful and clarifying; user values direct, concise explanations.
+- User communicates in **Arabic**; assistant should respond in Arabic.
+- Tone: helpful, direct, concise.
 
 ## Visual design & UX direction
 
-- Framework: **Vite + React**.
-- Current design is the user's reference baseline — must be preserved exactly; avoid altering layout, fonts, colors, spacing, or components unless explicitly requested.
-- No further design specifics inferred yet; awaiting project file exploration.
+- Stack: **Vite + React + Tailwind CSS**.
+- Arabic-language UI; professional look with **blue / royal color palette**.
+- Already includes a **MobileBottomNav** component (bottom navigation for mobile).
+- Design is the reference baseline — must not change layout, fonts, colors, spacing, or components unless explicitly requested.
+- No detailed token/component inventory captured yet.
 
 ## Decisions, constraints & rationale
 
-- Project was imported into Bolt as static files; **no git history** and **no live GitHub link**.
-- Changes made in Bolt will **not** auto-sync back to GitHub.
-- Source of current codebase: snapshot of the GitHub repo at import time.
-- User's top priority: maintain visual fidelity to the original AI-generated site.
+- Imported as static files; **no git history**, no live GitHub link; Bolt changes won't auto-sync back.
+- User's top priority: visual fidelity to the original site.
+- Two mobile-conversion options identified:
+  1. **PWA** (installable web app) — recommended; achievable in Bolt; no design change; can be wrapped later.
+  2. **Capacitor** (native APK/IPA) — requires external build tools not available in Bolt.
+- Assistant recommended starting with PWA; **user has not yet confirmed the choice**.
 
 ## Open questions & assumptions
 
+- Which mobile approach the user wants to proceed with (PWA vs Capacitor) is unconfirmed.
 - Exact product purpose and feature set of "Supervision-Fund" still unconfirmed.
 - Whether user intends to re-export to GitHub or work solely within Bolt is unknown.
-- Tech stack beyond Vite + React (styling, state management, backend) not yet explored.
-- Specific features or modifications the user wants to add have not yet been specified.
+- State management and backend choices not yet explored.
+- Specific features/modifications beyond mobile conversion not yet specified.
