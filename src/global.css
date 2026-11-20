@@ -1,0 +1,6 @@
+@import "nativewindcss";
+
+:root {
+  --font-display: 'Cairo', 'IBM Plex Sans Arabic', system-ui, sans-serif;
+  --font-body: 'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif;
+}
