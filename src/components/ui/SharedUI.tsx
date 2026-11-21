@@ -1,64 +1,75 @@
 import React, { useEffect } from 'react';
 import {
+  View,
+  Text,
+  Pressable,
+  Modal as RNModal,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
+import {
   AlertCircle,
   CheckCircle2,
   Clock,
   MinusCircle,
   X,
   AlertTriangle,
-} from 'lucide-react';
+} from 'lucide-react-native';
+import type { StatusTone } from './types';
 
 export function LogoMark({ size = 40, light = false }: { size?: number; light?: boolean }) {
   return (
-    <div
-      className={`flex items-center justify-center rounded-xl shrink-0 ${
-        light
-          ? 'bg-white/12 border border-white/20 text-white'
-          : 'bg-gradient-to-br from-[#123B70] to-[#2878C8] text-white shadow-sm'
-      }`}
-      style={{ width: size, height: size }}
+    <View
+      style={[
+        styles.logoContainer,
+        {
+          width: size,
+          height: size,
+          borderRadius: 12,
+          backgroundColor: light ? 'rgba(255,255,255,0.12)' : undefined,
+          borderColor: light ? 'rgba(255,255,255,0.2)' : undefined,
+          borderWidth: light ? 1 : 0,
+        },
+        !light && { backgroundColor: '#123B70' },
+      ]}
     >
-      <svg
-        width={size * 0.58}
-        height={size * 0.58}
-        viewBox="0 0 32 32"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-hidden="true"
-      >
-        <path
-          d="M16 3L27 7.5V15.5C27 22.3 22.3 27.6 16 29.5C9.7 27.6 5 22.3 5 15.5V7.5L16 3Z"
-          stroke="currentColor"
-          strokeWidth="2.1"
-          strokeLinejoin="round"
-        />
-        <path
-          d="M16 9V22M16 9C13.5 11.2 11.5 11.8 10 12M16 9C18.5 11.2 20.5 11.8 22 12M11.5 16.5H20.5"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </div>
+      <SvgLogo width={size * 0.58} height={size * 0.58} color="#ffffff" />
+    </View>
   );
 }
 
-export type StatusTone = 'success' | 'danger' | 'warning' | 'neutral' | 'info';
+import Svg, { Path } from 'react-native-svg';
 
-export function StatusIndicator({
-  label,
-  tone,
-}: {
-  label: string;
-  tone: StatusTone;
-}) {
-  const styles: Record<StatusTone, string> = {
-    success: 'text-[#16A36A] bg-[#16A36A]/10',
-    danger: 'text-[#DC5555] bg-[#DC5555]/10',
-    warning: 'text-[#C67B1B] bg-[#E99A35]/14',
-    neutral: 'text-[#748399] bg-[#F1F5F9]',
-    info: 'text-[#2878C8] bg-[#EAF3FC]',
+function SvgLogo({ width, height, color }: { width: number; height: number; color: string }) {
+  return (
+    <Svg width={width} height={height} viewBox="0 0 32 32" fill="none">
+      <Path
+        d="M16 3L27 7.5V15.5C27 22.3 22.3 27.6 16 29.5C9.7 27.6 5 22.3 5 15.5V7.5L16 3Z"
+        stroke={color}
+        strokeWidth={2.1}
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M16 9V22M16 9C13.5 11.2 11.5 11.8 10 12M16 9C18.5 11.2 20.5 11.8 22 12M11.5 16.5H20.5"
+        stroke={color}
+        strokeWidth={1.9}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export type { StatusTone };
+
+export function StatusIndicator({ label, tone }: { label: string; tone: StatusTone }) {
+  const stylesMap: Record<StatusTone, { color: string; bg: string }> = {
+    success: { color: '#16A36A', bg: 'rgba(22,163,106,0.1)' },
+    danger: { color: '#DC5555', bg: 'rgba(220,85,85,0.1)' },
+    warning: { color: '#C67B1B', bg: 'rgba(233,154,53,0.14)' },
+    neutral: { color: '#748399', bg: '#F1F5F9' },
+    info: { color: '#2878C8', bg: '#EAF3FC' },
   };
 
   const Icon =
@@ -70,13 +81,13 @@ export function StatusIndicator({
           ? Clock
           : MinusCircle;
 
+  const s = stylesMap[tone];
+
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap shrink-0 ${styles[tone]}`}
-    >
-      <Icon className="w-3.5 h-3.5 shrink-0" />
-      <span>{label}</span>
-    </span>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, backgroundColor: s.bg }}>
+      <Icon size={14} color={s.color} />
+      <Text style={{ fontSize: 12, fontWeight: '600', color: s.color }}>{label}</Text>
+    </View>
   );
 }
 
@@ -90,44 +101,34 @@ export function StatCard({
   title: string;
   value: string;
   subtitle?: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
   accent?: 'blue' | 'royal' | 'green' | 'red' | 'amber';
 }) {
-  const accentMap = {
-    blue: 'bg-[#EAF3FC] text-[#2878C8]',
-    royal: 'bg-[#123B70]/10 text-[#123B70]',
-    green: 'bg-[#16A36A]/10 text-[#16A36A]',
-    red: 'bg-[#DC5555]/10 text-[#DC5555]',
-    amber: 'bg-[#E99A35]/14 text-[#C67B1B]',
+  const accentMap: Record<string, { bg: string; color: string; valColor: string }> = {
+    blue: { bg: '#EAF3FC', color: '#2878C8', valColor: '#172B45' },
+    royal: { bg: 'rgba(18,59,112,0.1)', color: '#123B70', valColor: '#123B70' },
+    green: { bg: 'rgba(22,163,106,0.1)', color: '#16A36A', valColor: '#16A36A' },
+    red: { bg: 'rgba(220,85,85,0.1)', color: '#DC5555', valColor: '#DC5555' },
+    amber: { bg: 'rgba(233,154,53,0.14)', color: '#C67B1B', valColor: '#C67B1B' },
   };
 
-  const valueColorMap = {
-    blue: 'text-[#172B45]',
-    royal: 'text-[#123B70]',
-    green: 'text-[#16A36A]',
-    red: 'text-[#DC5555]',
-    amber: 'text-[#C67B1B]',
-  };
+  const a = accentMap[accent];
 
   return (
-    <div className="h-full bg-white rounded-xl border border-slate-200/80 p-4 sm:p-5 shadow-[0_1px_3px_rgba(18,59,112,0.04)] hover:border-[#4A90D9]/50 transition-colors duration-150 flex flex-col justify-between">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs sm:text-sm font-medium text-[#748399] truncate">{title}</p>
-          <p
-            className={`mt-2 text-xl sm:text-2xl font-bold tracking-tight tabular-nums break-words ${valueColorMap[accent]}`}
-          >
+    <View style={styles.card}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 13, fontWeight: '500', color: '#748399' }} numberOfLines={1}>{title}</Text>
+          <Text style={{ marginTop: 8, fontSize: 20, fontWeight: '700', color: a.valColor, fontVariant: ['tabular-nums'] }}>
             {value}
-          </p>
-          {subtitle && (
-            <p className="mt-1.5 text-xs text-[#748399] line-clamp-2">{subtitle}</p>
-          )}
-        </div>
-        <div className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center shrink-0 ${accentMap[accent]}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-      </div>
-    </div>
+          </Text>
+          {subtitle ? <Text style={{ marginTop: 6, fontSize: 12, color: '#748399' }} numberOfLines={2}>{subtitle}</Text> : null}
+        </View>
+        <View style={{ width: 44, height: 44, borderRadius: 12, backgroundColor: a.bg, alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={20} color={a.color} />
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -141,17 +142,13 @@ export function PageHeader({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-5 sm:mb-6">
-      <div className="min-w-0">
-        <h1 className="text-lg sm:text-2xl font-bold text-[#172B45] leading-snug">{title}</h1>
-        <p className="mt-1 text-xs sm:text-sm text-[#748399] leading-relaxed">{description}</p>
-      </div>
-      {action && (
-        <div className="w-full sm:w-auto shrink-0 flex flex-wrap items-center gap-2 sm:gap-2.5">
-          {action}
-        </div>
-      )}
-    </div>
+    <View style={{ flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+      <View style={{ flexShrink: 1 }}>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: '#172B45', lineHeight: 28 }}>{title}</Text>
+        <Text style={{ marginTop: 4, fontSize: 13, color: '#748399', lineHeight: 20 }}>{description}</Text>
+      </View>
+      {action && <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>{action}</View>}
+    </View>
   );
 }
 
@@ -170,48 +167,25 @@ export function Modal({
   children: React.ReactNode;
   size?: 'sm' | 'md' | 'lg';
 }) {
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  const maxW =
-    size === 'sm' ? 'max-w-md' : size === 'lg' ? 'max-w-2xl' : 'max-w-lg';
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-[#123B70]/45 backdrop-blur-[2px]"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div
-        className={`w-full ${maxW} max-h-[92vh] flex flex-col bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-start justify-between gap-3 px-4 py-3.5 sm:px-6 sm:py-4 border-b border-slate-100 bg-[#F8FAFC]">
-          <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-bold text-[#172B45]">{title}</h2>
-            {subtitle && <p className="text-xs text-[#748399] mt-0.5 leading-relaxed">{subtitle}</p>}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-2 rounded-lg text-[#748399] hover:text-[#172B45] hover:bg-slate-200/60 transition-colors shrink-0"
-            aria-label="إغلاق"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="p-4 sm:p-6 overflow-y-auto">{children}</div>
-      </div>
-    </div>
+    <RNModal visible={isOpen} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 12, backgroundColor: 'rgba(18,59,112,0.45)' }}>
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 17, fontWeight: '700', color: '#172B45' }}>{title}</Text>
+              {subtitle ? <Text style={{ fontSize: 12, color: '#748399', marginTop: 2 }}>{subtitle}</Text> : null}
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ padding: 8, borderRadius: 8 }}>
+              <X size={20} color="#748399" />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ padding: 24 }} showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+        </View>
+      </View>
+    </RNModal>
   );
 }
 
@@ -234,45 +208,37 @@ export function ConfirmModal({
 }) {
   const iconTone =
     variant === 'warning'
-      ? 'bg-[#E99A35]/15 text-[#C67B1B]'
+      ? { bg: 'rgba(233,154,53,0.15)', color: '#C67B1B' }
       : variant === 'primary'
-        ? 'bg-[#EAF3FC] text-[#2878C8]'
-        : 'bg-[#DC5555]/10 text-[#DC5555]';
+        ? { bg: '#EAF3FC', color: '#2878C8' }
+        : { bg: 'rgba(220,85,85,0.1)', color: '#DC5555' };
 
   const btnTone =
     variant === 'warning'
-      ? 'bg-[#C67B1B] hover:bg-[#a86613]'
+      ? '#C67B1B'
       : variant === 'primary'
-        ? 'bg-[#2878C8] hover:bg-[#123B70]'
-        : 'bg-[#DC5555] hover:bg-[#c54646]';
+        ? '#2878C8'
+        : '#DC5555';
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
-      <div className="flex items-start gap-3">
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconTone}`}>
-          <AlertTriangle className="w-5 h-5" />
-        </div>
-        <p className="text-sm text-[#172B45] leading-relaxed">{message}</p>
-      </div>
-      <div className="mt-6 flex items-center justify-end gap-2.5">
-        <button
-          type="button"
-          onClick={onClose}
-          className="h-10 px-4 text-sm font-medium text-[#172B45] bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+        <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: iconTone.bg, alignItems: 'center', justifyContent: 'center' }}>
+          <AlertTriangle size={20} color={iconTone.color} />
+        </View>
+        <Text style={{ flex: 1, fontSize: 14, color: '#172B45', lineHeight: 22 }}>{message}</Text>
+      </View>
+      <View style={{ marginTop: 24, flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+        <TouchableOpacity onPress={onClose} style={{ height: 40, paddingHorizontal: 16, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center' }}>
+          <Text style={{ fontSize: 14, fontWeight: '500', color: '#172B45' }}>إلغاء</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => { onConfirm(); onClose(); }}
+          style={{ height: 40, paddingHorizontal: 16, borderRadius: 12, backgroundColor: btnTone, justifyContent: 'center' }}
         >
-          إلغاء
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            onConfirm();
-            onClose();
-          }}
-          className={`h-10 px-4 text-sm font-semibold text-white rounded-xl transition-colors cursor-pointer ${btnTone}`}
-        >
-          {confirmLabel}
-        </button>
-      </div>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: '#ffffff' }}>{confirmLabel}</Text>
+        </TouchableOpacity>
+      </View>
     </Modal>
   );
 }
@@ -283,20 +249,20 @@ export function EmptyState({
   description,
   action,
 }: {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
   title: string;
   description: string;
   action?: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200/80 py-12 px-5 text-center">
-      <div className="w-14 h-14 mx-auto rounded-2xl bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center">
-        <Icon className="w-7 h-7" />
-      </div>
-      <h3 className="mt-4 text-base font-bold text-[#172B45]">{title}</h3>
-      <p className="mt-1.5 text-sm text-[#748399] max-w-md mx-auto leading-relaxed">{description}</p>
-      {action && <div className="mt-5">{action}</div>}
-    </div>
+    <View style={{ backgroundColor: '#ffffff', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(226,232,240,0.8)', paddingVertical: 48, paddingHorizontal: 20, alignItems: 'center' }}>
+      <View style={{ width: 56, height: 56, borderRadius: 16, backgroundColor: '#EAF3FC', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={28} color="#2878C8" />
+      </View>
+      <Text style={{ marginTop: 16, fontSize: 16, fontWeight: '700', color: '#172B45' }}>{title}</Text>
+      <Text style={{ marginTop: 6, fontSize: 14, color: '#748399', textAlign: 'center', lineHeight: 22 }}>{description}</Text>
+      {action && <View style={{ marginTop: 20 }}>{action}</View>}
+    </View>
   );
 }
 
@@ -309,29 +275,64 @@ export function ToastBanner({
 }) {
   if (!toast) return null;
 
-  const colors =
-    toast.type === 'warning'
-      ? 'bg-[#172B45] border-[#E99A35]'
-      : 'bg-[#123B70] border-[#2878C8]';
+  const bgColor = toast.type === 'warning' ? '#172B45' : '#123B70';
+  const borderColor = toast.type === 'warning' ? '#E99A35' : '#2878C8';
 
   return (
-    <div className="fixed bottom-20 lg:bottom-6 left-4 right-4 sm:left-6 sm:right-auto z-50 max-w-sm no-print">
-      <div
-        className={`flex items-center justify-between gap-3 px-4 py-3 rounded-xl text-white shadow-lg border-r-4 ${colors}`}
-      >
-        <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium">
-          <CheckCircle2 className="w-4 h-4 text-[#4ADE80] shrink-0" />
-          <span>{toast.message}</span>
-        </div>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="text-white/70 hover:text-white p-1 shrink-0"
-          aria-label="إغلاق الإشعار"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+    <View style={{ position: 'absolute', bottom: 80, left: 16, right: 16, zIndex: 50 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: bgColor, borderLeftWidth: 4, borderLeftColor: borderColor, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, elevation: 5 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+          <CheckCircle2 size={16} color="#4ADE80" />
+          <Text style={{ fontSize: 14, fontWeight: '500', color: '#ffffff', flexShrink: 1 }}>{toast.message}</Text>
+        </View>
+        <TouchableOpacity onPress={onDismiss} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <X size={16} color="rgba(255,255,255,0.7)" />
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  logoContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(226,232,240,0.8)',
+    padding: 20,
+    shadowColor: 'rgba(18,59,112,0.04)',
+    shadowOpacity: 1,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  },
+  modalContainer: {
+    width: '100%',
+    maxWidth: 460,
+    maxHeight: '90%',
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#F8FAFC',
+  },
+});

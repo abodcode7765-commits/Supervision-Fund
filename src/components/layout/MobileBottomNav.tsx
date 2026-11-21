@@ -1,12 +1,18 @@
 import React from 'react';
 import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+} from 'react-native';
+import {
   LayoutDashboard,
   Users,
   CalendarCheck,
   ReceiptText,
   Coins,
   Menu,
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { PageId } from '../../types';
 
 export function MobileBottomNav({
@@ -20,7 +26,7 @@ export function MobileBottomNav({
   onNavigate: (page: PageId) => void;
   onOpenMenu: () => void;
 }) {
-  const candidates: { id: PageId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  const candidates: { id: PageId; label: string; icon: React.ComponentType<{ size?: number; color?: string }> }[] = [
     { id: 'dashboard', label: 'الرئيسية', icon: LayoutDashboard },
     { id: 'members', label: 'الأعضاء', icon: Users },
     { id: 'subscriptions', label: 'الاشتراكات', icon: CalendarCheck },
@@ -31,40 +37,56 @@ export function MobileBottomNav({
   const items = candidates.filter((c) => allowedPages.includes(c.id)).slice(0, 4);
 
   return (
-    <nav
-      className="lg:hidden fixed bottom-0 right-0 left-0 z-30 bg-white border-t border-slate-200 px-2 flex items-center justify-around no-print"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)', height: 'calc(3.5rem + env(safe-area-inset-bottom))' }}
-      aria-label="التنقل السريع"
-    >
+    <View style={styles.container}>
       {items.map((item) => {
         const Icon = item.icon;
         const active = activePage === item.id;
         return (
-          <button
+          <Pressable
             key={item.id}
-            type="button"
-            onClick={() => onNavigate(item.id)}
-            className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 rounded-lg ${
-              active ? 'text-[#2878C8]' : 'text-[#748399]'
-            }`}
+            onPress={() => onNavigate(item.id)}
+            style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}
           >
-            <Icon className="w-5 h-5 shrink-0" />
-            <span className="text-[10px] font-semibold whitespace-nowrap truncate max-w-full">
+            <Icon size={20} color={active ? '#2878C8' : '#748399'} />
+            <Text style={{ fontSize: 10, fontWeight: '600', color: active ? '#2878C8' : '#748399', marginTop: 2 }} numberOfLines={1}>
               {item.label}
-            </span>
-          </button>
+            </Text>
+          </Pressable>
         );
       })}
-      <button
-        type="button"
-        onClick={onOpenMenu}
-        className="flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 px-1.5 py-1 rounded-lg text-[#748399]"
+      <Pressable
+        onPress={onOpenMenu}
+        style={({ pressed }) => [styles.tab, pressed && { opacity: 0.7 }]}
       >
-        <Menu className="w-5 h-5 shrink-0" />
-        <span className="text-[10px] font-semibold whitespace-nowrap truncate max-w-full">
-          القائمة
-        </span>
-      </button>
-    </nav>
+        <Menu size={20} color="#748399" />
+        <Text style={{ fontSize: 10, fontWeight: '600', color: '#748399', marginTop: 2 }}>القائمة</Text>
+      </Pressable>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    height: 60,
+    paddingBottom: 8,
+    backgroundColor: '#ffffff',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 8,
+  },
+  tab: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+});

@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, Lock, User, ArrowLeft, ShieldCheck, AlertCircle, Users, Layers } from 'lucide-react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+} from 'react-native';
+import { Eye, EyeOff, Lock, User, ArrowLeft, ShieldCheck, AlertCircle, Users, Layers } from 'lucide-react-native';
 import { LogoMark } from '../ui/SharedUI';
 import { SystemUser } from '../../types';
 import { authenticateMockUser } from '../../services/contracts';
@@ -20,8 +28,7 @@ export function LoginPage({
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     const result = authenticateMockUser(users, { username, password });
     if (!result.ok) {
       setError(result.error);
@@ -32,142 +39,188 @@ export function LoginPage({
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F7FA] flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-4 py-6 sm:px-6 sm:py-8 lg:px-10">
-        <div className="w-full max-w-5xl flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-12">
-          {/* Login Form Section */}
-          <div className="w-full max-w-md bg-white rounded-2xl border border-slate-200/90 p-5 sm:p-8 shadow-[0_8px_30px_rgba(18,59,112,0.06)]">
-            <div className="flex flex-col items-center text-center mb-6">
-              <LogoMark size={54} />
-              <h1 className="mt-4 text-xl sm:text-2xl font-bold text-[#172B45]">
-                مرحباً بك في صندوق الإشراف
-              </h1>
-              <p className="mt-1.5 text-xs sm:text-sm text-[#748399]">
-                نظام إدارة الصندوق العائلي – ذوي محسن
-              </p>
-            </div>
+    <View style={styles.container}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 16, paddingVertical: 24 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.card}>
+          <View style={{ alignItems: 'center', marginBottom: 24 }}>
+            <LogoMark size={54} />
+            <Text style={{ marginTop: 16, fontSize: 20, fontWeight: '700', color: '#172B45', textAlign: 'center' }}>
+              مرحباً بك في صندوق الإشراف
+            </Text>
+            <Text style={{ marginTop: 6, fontSize: 13, color: '#748399', textAlign: 'center' }}>
+              نظام إدارة الصندوق العائلي – ذوي محسن
+            </Text>
+          </View>
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="p-3 rounded-xl bg-[#DC5555]/10 border border-[#DC5555]/25 text-[#DC5555] text-xs font-semibold flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
+          {error ? (
+            <View style={styles.errorBox}>
+              <AlertCircle size={16} color="#DC5555" />
+              <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#DC5555' }}>{error}</Text>
+            </View>
+          ) : null}
 
-              <div>
-                <label
-                  htmlFor="login-username"
-                  className="block text-sm font-semibold text-[#172B45] mb-1.5"
+          <View style={{ gap: 16 }}>
+            <View>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#172B45', marginBottom: 6 }}>اسم المستخدم</Text>
+              <View style={styles.inputRow}>
+                <User size={16} color="#748399" style={{ position: 'absolute', right: 14, top: 14, zIndex: 1 }} />
+                <TextInput
+                  value={username}
+                  onChangeText={setUsername}
+                  placeholder="أدخل اسم المستخدم"
+                  placeholderTextColor="#94A3B8"
+                  style={[styles.input, { paddingRight: 40 }]}
+                  textAlign="right"
+                />
+              </View>
+            </View>
+
+            <View>
+              <Text style={{ fontSize: 14, fontWeight: '600', color: '#172B45', marginBottom: 6 }}>كلمة المرور</Text>
+              <View style={styles.inputRow}>
+                <Lock size={16} color="#748399" style={{ position: 'absolute', right: 14, top: 14, zIndex: 1 }} />
+                <TextInput
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="أدخل كلمة المرور"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showPassword}
+                  style={[styles.input, { paddingRight: 40, paddingLeft: 44 }]}
+                  textAlign="right"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  style={{ position: 'absolute', left: 12, top: 12, padding: 4, zIndex: 1 }}
                 >
-                  اسم المستخدم
-                </label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-[#748399] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    id="login-username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="أدخل اسم المستخدم"
-                    className="w-full h-11 pr-10 pl-4 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm text-[#172B45] focus:bg-white focus:outline-none focus:border-[#2878C8] focus:ring-2 focus:ring-[#2878C8]/15 transition-all"
-                  />
-                </div>
-              </div>
+                  {showPassword ? <EyeOff size={16} color="#748399" /> : <Eye size={16} color="#748399" />}
+                </TouchableOpacity>
+              </View>
+            </View>
 
-              <div>
-                <label
-                  htmlFor="login-password"
-                  className="block text-sm font-semibold text-[#172B45] mb-1.5"
-                >
-                  كلمة المرور
-                </label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-[#748399] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  <input
-                    id="login-password"
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="أدخل كلمة المرور"
-                    className="w-full h-11 pr-10 pl-11 rounded-xl border border-slate-200 bg-[#F8FAFC] text-sm text-[#172B45] focus:bg-white focus:outline-none focus:border-[#2878C8] focus:ring-2 focus:ring-[#2878C8]/15 transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#748399] hover:text-[#172B45] p-1"
-                    aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+            <TouchableOpacity onPress={handleSubmit} style={styles.loginBtn} activeOpacity={0.85}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }}>تسجيل الدخول</Text>
+              <ArrowLeft size={16} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
+        </View>
 
-              <button
-                type="submit"
-                className="w-full h-12 rounded-xl bg-[#2878C8] hover:bg-[#123B70] text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
-              >
-                <span>تسجيل الدخول</span>
-                <ArrowLeft className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
+        <View style={{ marginTop: 20, gap: 20 }}>
+          <View>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: '#123B70', lineHeight: 30 }}>
+              إدارة مالية عائلية منظمة وشفافة
+            </Text>
+            <Text style={{ marginTop: 10, fontSize: 13, color: '#748399', lineHeight: 22 }}>
+              منصة إدارية متكاملة لمتابعة اشتراكات الأعضاء السنوية والشهرية، تنظيم المجموعات، إدارة القطات ومعونة الزواج، وإصدار التقارير المالية الدقيقة.
+            </Text>
+          </View>
 
-          {/* Section Divider */}
-          <div
-            className="w-full max-w-md h-px bg-slate-200/90 lg:w-px lg:h-auto lg:self-stretch lg:my-6"
-            aria-hidden="true"
-          />
+          <View style={{ flexDirection: 'row', gap: 14 }}>
+            <View style={styles.statBox}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#EAF3FC', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Users size={16} color="#2878C8" />
+              </View>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#123B70', fontVariant: ['tabular-nums'] }}>{membersCount}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '500', color: '#748399', marginTop: 4 }}>عضو مسجل بالصندوق</Text>
+            </View>
+            <View style={styles.statBox}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(18,59,112,0.1)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <Layers size={16} color="#123B70" />
+              </View>
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#123B70', fontVariant: ['tabular-nums'] }}>{groupsCount}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '500', color: '#748399', marginTop: 4 }}>مجموعات عائلية منظمة</Text>
+            </View>
+          </View>
 
-          {/* Executive Info Section (Clean Surface, No Logo, With Dividers) */}
-          <div className="w-full max-w-md lg:max-w-sm flex flex-col gap-5 text-[#172B45]">
-            <div>
-              <h2 className="text-xl sm:text-2xl font-bold leading-snug text-[#123B70]">
-                إدارة مالية عائلية منظمة وشفافة
-              </h2>
-              <p className="mt-2.5 text-xs sm:text-sm text-[#748399] leading-relaxed">
-                منصة إدارية متكاملة لمتابعة اشتراكات الأعضاء السنوية والشهرية، تنظيم المجموعات،
-                إدارة القطات ومعونة الزواج، وإصدار التقارير المالية الدقيقة.
-              </p>
-            </div>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderTopColor: 'rgba(226,232,240,0.9)', paddingTop: 16 }}>
+            <ShieldCheck size={16} color="#2878C8" />
+            <Text style={{ fontSize: 12, color: '#748399' }}>نظام إداري خاص بصندوق الإشراف – ذوي محسن</Text>
+          </View>
+        </View>
+      </ScrollView>
 
-            <div className="pt-4 border-t border-slate-200/90 grid grid-cols-2 gap-3.5">
-              <div className="h-full bg-white rounded-xl border border-slate-200/85 p-4 shadow-[0_2px_8px_rgba(18,59,112,0.04)] hover:border-[#4A90D9]/60 transition-colors flex flex-col justify-between">
-                <div className="w-8 h-8 rounded-lg bg-[#EAF3FC] text-[#2878C8] flex items-center justify-center mb-2.5">
-                  <Users className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xl sm:text-2xl font-bold tabular-nums text-[#123B70]">
-                    {membersCount}
-                  </div>
-                  <div className="text-xs font-medium text-[#748399] mt-1">عضو مسجل بالصندوق</div>
-                </div>
-              </div>
-              <div className="h-full bg-white rounded-xl border border-slate-200/85 p-4 shadow-[0_2px_8px_rgba(18,59,112,0.04)] hover:border-[#4A90D9]/60 transition-colors flex flex-col justify-between">
-                <div className="w-8 h-8 rounded-lg bg-[#123B70]/10 text-[#123B70] flex items-center justify-center mb-2.5">
-                  <Layers className="w-4 h-4" />
-                </div>
-                <div>
-                  <div className="text-xl sm:text-2xl font-bold tabular-nums text-[#123B70]">
-                    {groupsCount}
-                  </div>
-                  <div className="text-xs font-medium text-[#748399] mt-1">مجموعات عائلية منظمة</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-200/90 flex items-center gap-2 text-xs text-[#748399]">
-              <ShieldCheck className="w-4 h-4 shrink-0 text-[#2878C8]" />
-              <span>نظام إداري خاص بصندوق الإشراف – ذوي محسن</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Page Footer */}
-      <footer className="border-t border-slate-200/80 bg-white/70 py-3.5 px-4 text-center text-xs text-[#748399]">
-        جميع الحقوق محفوظة لصندوق الإشراف – ذوي محسن © 2026
-      </footer>
-    </div>
+      <View style={styles.footer}>
+        <Text style={{ fontSize: 12, color: '#748399', textAlign: 'center' }}>جميع الحقوق محفوظة لصندوق الإشراف – ذوي محسن © 2026</Text>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F5F7FA',
+  },
+  card: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(226,232,240,0.9)',
+    padding: 24,
+    shadowColor: 'rgba(18,59,112,0.06)',
+    shadowOpacity: 1,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 4,
+  },
+  errorBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(220,85,85,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(220,85,85,0.25)',
+    marginBottom: 16,
+  },
+  inputRow: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  input: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 16,
+    fontSize: 14,
+    color: '#172B45',
+  },
+  loginBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#2878C8',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(226,232,240,0.85)',
+    padding: 16,
+    shadowColor: 'rgba(18,59,112,0.04)',
+    shadowOpacity: 1,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  footer: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(226,232,240,0.8)',
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+});

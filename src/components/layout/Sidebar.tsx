@@ -1,5 +1,15 @@
 import React from 'react';
 import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Modal as RNModal,
+  Dimensions,
+} from 'react-native';
+import {
   LayoutDashboard,
   Users,
   Layers,
@@ -14,14 +24,14 @@ import {
   Settings,
   LogOut,
   X,
-} from 'lucide-react';
+} from 'lucide-react-native';
 import { PageId } from '../../types';
 import { LogoMark } from '../ui/SharedUI';
 
 export interface NavItem {
   id: PageId;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ size?: number; color?: string }>;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -68,110 +78,149 @@ export function Sidebar({
   const visibleItems = NAV_ITEMS.filter((item) => allowedPages.includes(item.id));
 
   const sidebarContent = (
-    <div className="h-full flex flex-col bg-[#123B70] text-white select-none">
-      {/* Brand Header */}
-      <div className="px-5 py-5 flex items-center justify-between border-b border-white/10">
-        <div className="flex items-center gap-3 min-w-0">
+    <View style={styles.container}>
+      <View style={styles.brandHeader}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
           <LogoMark size={40} light />
-          <div className="min-w-0">
-            <div className="text-base font-bold leading-tight truncate">صندوق الإشراف</div>
-            <div className="text-xs text-[#A8C7EB] mt-0.5 truncate">ذوي محسن</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onCloseMobile}
-          className="lg:hidden p-1.5 rounded-lg text-white/75 hover:text-white hover:bg-white/10"
-          aria-label="إغلاق القائمة"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#ffffff' }} numberOfLines={1}>صندوق الإشراف</Text>
+            <Text style={{ fontSize: 12, color: '#A8C7EB', marginTop: 2 }} numberOfLines={1}>ذوي محسن</Text>
+          </View>
+        </View>
+        <TouchableOpacity onPress={onCloseMobile} style={{ padding: 6, borderRadius: 8 }}>
+          <X size={20} color="rgba(255,255,255,0.75)" />
+        </TouchableOpacity>
+      </View>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 overflow-y-auto sidebar-scroll px-3 py-4 space-y-1">
+      <ScrollView style={{ flex: 1, paddingHorizontal: 12, paddingVertical: 16 }} showsVerticalScrollIndicator={false}>
         {visibleItems.map((item) => {
           const Icon = item.icon;
           const isActive = activePage === item.id;
           return (
-            <button
+            <Pressable
               key={item.id}
-              type="button"
-              onClick={() => handleSelect(item.id)}
-              className={`w-full flex items-center justify-between gap-2.5 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150 cursor-pointer ${
-                isActive
-                  ? 'bg-[#2878C8] text-white shadow-sm'
-                  : 'text-[#DCE9F8] hover:bg-white/10 hover:text-white'
-              }`}
+              onPress={() => handleSelect(item.id)}
+              style={({ pressed }) => [
+                styles.navItem,
+                isActive && styles.navItemActive,
+                pressed && { opacity: 0.8 },
+              ]}
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <Icon
-                  className={`w-[18px] h-[18px] shrink-0 ${
-                    isActive ? 'text-white' : 'text-[#9EC4EE]'
-                  }`}
-                />
-                <span className="truncate">{item.label}</span>
-              </div>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                <Icon size={18} color={isActive ? '#ffffff' : '#9EC4EE'} />
+                <Text style={{ fontSize: 14, fontWeight: '500', color: isActive ? '#ffffff' : '#DCE9F8' }} numberOfLines={1}>
+                  {item.label}
+                </Text>
+              </View>
               {item.id === 'overdue' && overdueCount > 0 && (
-                <span
-                  className={`text-[11px] font-bold px-2 py-0.5 rounded-md tabular-nums shrink-0 ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : 'bg-[#DC5555]/90 text-white'
-                  }`}
-                >
-                  {overdueCount}
-                </span>
+                <View style={{ backgroundColor: isActive ? 'rgba(255,255,255,0.2)' : 'rgba(220,85,85,0.9)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#ffffff', fontVariant: ['tabular-nums'] }}>
+                    {overdueCount}
+                  </Text>
+                </View>
               )}
-            </button>
+            </Pressable>
           );
         })}
-      </nav>
+      </ScrollView>
 
-      {/* Bottom User & Logout */}
-      <div className="p-3.5 border-t border-white/10 bg-[#0E2F5A]/70">
-        <div className="flex items-center gap-3 px-2 py-2">
-          <div className="w-9 h-9 rounded-xl bg-[#2878C8] text-white font-bold text-sm flex items-center justify-center shrink-0">
-            {userName.slice(0, 1)}
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold text-white truncate">{userName}</div>
-            <div className="text-[11px] text-[#A8C7EB] truncate">{userRole}</div>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold text-[#DCE9F8] bg-white/8 hover:bg-[#DC5555] hover:text-white transition-colors cursor-pointer"
+      <View style={styles.bottomSection}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 8, paddingVertical: 8 }}>
+          <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#2878C8', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>{userName.slice(0, 1)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#ffffff' }} numberOfLines={1}>{userName}</Text>
+            <Text style={{ fontSize: 11, color: '#A8C7EB' }} numberOfLines={1}>{userRole}</Text>
+          </View>
+        </View>
+        <Pressable
+          onPress={onLogout}
+          style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.8 }]}
         >
-          <LogOut className="w-4 h-4 shrink-0" />
-          <span>تسجيل الخروج</span>
-        </button>
-      </div>
-    </div>
+          <LogOut size={16} color="#DCE9F8" />
+          <Text style={{ fontSize: 12, fontWeight: '600', color: '#DCE9F8' }}>تسجيل الخروج</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 
   return (
     <>
-      <aside className="hidden lg:block fixed top-0 right-0 bottom-0 w-64 z-30 border-l border-[#123B70] no-print">
-        {sidebarContent}
-      </aside>
+      <View style={[styles.sidebarFixed, { width: 0 }]} />
 
       {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-50 flex no-print"
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className="fixed inset-0 bg-[#123B70]/50 backdrop-blur-[1px]"
-            onClick={onCloseMobile}
-          />
-          <div className="relative w-72 max-w-[85vw] h-full z-10 shadow-2xl">
+        <RNModal visible={mobileOpen} transparent animationType="slide" onRequestClose={onCloseMobile}>
+          <Pressable style={{ flex: 1, backgroundColor: 'rgba(18,59,112,0.5)' }} onPress={onCloseMobile} />
+          <View style={[styles.drawer, { width: 288 }]}>
             {sidebarContent}
-          </div>
-        </div>
+          </View>
+        </RNModal>
       )}
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#123B70',
+  },
+  brandHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  sidebarFixed: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    zIndex: 30,
+  },
+  drawer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: '#123B70',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  navItemActive: {
+    backgroundColor: '#2878C8',
+  },
+  bottomSection: {
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(14,47,90,0.7)',
+  },
+  logoutBtn: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+});
